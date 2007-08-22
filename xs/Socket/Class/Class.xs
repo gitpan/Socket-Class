@@ -112,9 +112,11 @@ PREINIT:
 	double tmo = -1;
 	fd_set fds;
 	socklen_t sl;
+/*
 #ifdef _WIN32
 	DWORD dw1;
 #endif
+*/
 PPCODE:
 	Newxz( tv, 1, my_thread_var_t );
 	tv->s_domain = AF_INET;
@@ -212,6 +214,7 @@ PPCODE:
 	if( tmo >= 0 ) {
 		tv->timeout.tv_sec = (long) (tmo / 1000.0);
 		tv->timeout.tv_usec = (long) (tv->timeout.tv_sec * 1000 - tmo) * 1000;
+/*
 #ifdef _WIN32
 		dw1 = (DWORD) floor( tmo + 0.5 );
 		if( setsockopt(
@@ -234,6 +237,7 @@ PPCODE:
 			) == SOCKET_ERROR
 		) goto error;
 #endif
+*/
 	}
 	/* bind and listen */
 	if( la != NULL || lp != NULL || ln != 0 ) {
@@ -372,6 +376,7 @@ PREINIT:
 	fd_set fds;
 	int r;
 	socklen_t sl;
+	double ms;
 PPCODE:
 	if( ( tv = my_thread_var_find( this ) ) == NULL )
 		goto error;
@@ -381,6 +386,13 @@ PPCODE:
 	case AF_INET6:
 	default:
 		switch( items ) {
+		case 4:
+		default:
+			if( SvNOK( ST(3) ) || SvIOK( ST(3) ) ) {
+				ms = SvNV( ST(3) );
+				tv->timeout.tv_sec = (long) (ms / 1000);
+				tv->timeout.tv_usec = (long) (ms * 1000) % 1000000;
+			}
 		case 3:
 			s1 = SvPV( ST(1), l1 );
 			s2 = SvPV( ST(2), l2 );
@@ -408,6 +420,13 @@ PPCODE:
 		break;
 	case AF_UNIX:
 		switch( items ) {
+		case 3:
+		default:
+			if( SvNOK( ST(2) ) || SvIOK( ST(2) ) ) {
+				ms = SvNV( ST(2) );
+				tv->timeout.tv_sec = (long) (ms / 1000);
+				tv->timeout.tv_usec = (long) (ms * 1000) % 1000000;
+			}
 		case 2:
 			s1 = SvPV( ST(1), l1 );
 			Socket_setaddr_UNIX( &tv->r_addr, s1 );
@@ -1235,7 +1254,7 @@ _default:
 			tv->last_error[0] = '\0';
 			goto exit;
 		}
-		saddr.l = ail->ai_addrlen;
+		saddr.l = (socklen_t) ail->ai_addrlen;
 		memcpy( saddr.a, ail->ai_addr, ail->ai_addrlen );
 		freeaddrinfo( ail );
 		XPUSHs( sv_2mortal( newSVpvn( (char *) &saddr, MYSASIZE(saddr) ) ) );
@@ -1737,20 +1756,45 @@ PREINIT:
 	const void *val;
 	char tmp[20];
 PPCODE:
-	if( items > 4 && level == SOL_SOCKET ) {
+	if( SvIOK( value ) && level == SOL_SOCKET ) {
 		switch( optname ) {
 		case SO_LINGER:
-			((struct linger *) tmp)->l_onoff = (uint16_t) SvUV( value );
-			((struct linger *) tmp)->l_linger = (uint16_t) SvUV( ST(4) );
+			if( items > 4 ) {
+				((struct linger *) tmp)->l_onoff = (uint16_t) SvUV( value );
+				((struct linger *) tmp)->l_linger = (uint16_t) SvUV( ST(4) );
+			}
+			else {
+				((struct linger *) tmp)->l_onoff = (uint16_t) SvUV( value );
+				((struct linger *) tmp)->l_linger = 1;
+			}
 			val = tmp;
 			len = sizeof( struct linger );
 			break;
 		case SO_RCVTIMEO:
 		case SO_SNDTIMEO:
-			((struct timeval *) tmp)->tv_sec = (long) SvIV( value );
-			((struct timeval *) tmp)->tv_usec = (long) SvIV( ST(4) );
+#ifdef _WIN32
+			if( items > 4 ) {
+				*((DWORD *) tmp) = (DWORD) SvUV( value ) * 1000;
+				*((DWORD *) tmp) += (DWORD) (SvUV( ST(4) ) / 1000);
+			}
+			else {
+				*((DWORD *) tmp) = (DWORD) SvUV( value );
+			}
+			val = tmp;
+			len = sizeof( DWORD );
+#else
+			if( items > 4 ) {
+				((struct timeval *) tmp)->tv_sec = (long) SvIV( value );
+				((struct timeval *) tmp)->tv_usec = (long) SvIV( ST(4) );
+			}
+			else {
+				r = SvIV( value );
+				((struct timeval *) tmp)->tv_sec = (long) (r / 1000);
+				((struct timeval *) tmp)->tv_usec = (long) (r * 1000) % 1000000;
+			}
 			val = tmp;
 			len = sizeof( struct timeval );
+#endif
 			break;
 		default:
 			goto _chk;
@@ -1790,17 +1834,43 @@ PPCODE:
 	tv = my_thread_var_find( this );
 	if( tv != NULL ) {
 		TV_LOCK( tv );
+		l = sizeof( tmp );
 		r = getsockopt( tv->sock, level, optname, tmp, &l );
 		if( level = SOL_SOCKET ) {
 			switch( optname ) {
 			case SO_LINGER:
-				XPUSHs( sv_2mortal( newSVuv( ((struct linger *) tmp)->l_onoff ) ) );
-				XPUSHs( sv_2mortal( newSVuv( ((struct linger *) tmp)->l_linger ) ) );
+				XPUSHs( sv_2mortal(
+					newSVuv( ((struct linger *) tmp)->l_onoff ) ) );
+				XPUSHs( sv_2mortal(
+					newSVuv( ((struct linger *) tmp)->l_linger ) ) );
 				break;
 			case SO_RCVTIMEO:
 			case SO_SNDTIMEO:
-				XPUSHs( sv_2mortal( newSViv( ((struct timeval *) tmp)->tv_sec ) ) );
-				XPUSHs( sv_2mortal( newSViv( ((struct timeval *) tmp)->tv_usec ) ) );
+#ifdef _WIN32
+				printf( "optlen %d\n", l );
+				if( GIMME_V == G_ARRAY ) {
+					XPUSHs( sv_2mortal(
+						newSVuv( *((DWORD *) tmp) / 1000 ) ) );
+					XPUSHs( sv_2mortal(
+						newSVuv( (*((DWORD *) tmp) * 1000) % 1000000 ) ) );
+				}
+				else {
+					XPUSHs( sv_2mortal( newSVuv( *((DWORD *) tmp) ) ) );
+				}
+#else
+				if( GIMME_V == G_ARRAY ) {
+					XPUSHs( sv_2mortal(
+						newSViv( ((struct timeval *) tmp)->tv_sec ) ) );
+					XPUSHs( sv_2mortal(
+						newSViv( ((struct timeval *) tmp)->tv_usec ) ) );
+				}
+				else {
+					XPUSHs( sv_2mortal( newSVuv(
+						((struct timeval *) tmp)->tv_sec * 1000 +
+						((struct timeval *) tmp)->tv_usec / 1000
+					) ) );
+				}
+#endif
 				break;
 			default:
 				goto _chk;
@@ -1841,7 +1911,8 @@ PPCODE:
 	if( tv != NULL ) {
 		TV_LOCK( tv );
 		tv->timeout.tv_sec = (long) (ms / 1000);
-		tv->timeout.tv_usec = (long) (ms - tv->timeout.tv_sec * 1000) * 1000;
+		tv->timeout.tv_usec = (long) (ms * 1000) % 1000000;
+/*
 		if( tv->sock != INVALID_SOCKET ) {
 #ifdef _WIN32
 			DWORD dms = (DWORD) floor( ms + 0.5 );
@@ -1868,6 +1939,7 @@ PPCODE:
 			) goto error;
 #endif
 		}
+*/
 		XPUSHs( sv_2mortal( newSViv( 1 ) ) );
 error:
 		TV_UNLOCK( tv );
@@ -1914,7 +1986,7 @@ PPCODE:
 		if( timeout != NULL ) {
 			ms = SvNV( timeout );
 			t.tv_sec = (long) (ms / 1000);
-			t.tv_usec = (long) (ms - t.tv_sec * 1000) * 1000;
+			t.tv_usec = (long) (ms * 1000) % 1000000;
 			ret = select(
 				(int) (tv->sock + 1), &fd_socks, NULL, NULL, &t
 			);
@@ -1959,7 +2031,7 @@ PPCODE:
 		if( timeout != NULL ) {
 			ms = SvNV( timeout );
 			t.tv_sec = (long) (ms / 1000);
-			t.tv_usec = (long) (ms - t.tv_sec * 1000) * 1000;
+			t.tv_usec = (long) (ms * 1000) % 1000000;
 			ret = select(
 				(int) ( tv->sock + 1 ), NULL, &fd_socks, NULL, &t
 			);
@@ -1998,7 +2070,7 @@ PPCODE:
 	Sleep( timeout );
 #else
 	t.tv_sec = (long) (timeout / 1000);
-	t.tv_usec = (long) (timeout - t.tv_sec * 1000) * 1000;
+	t.tv_usec = (long) (timeout * 1000) % 1000000;
 	select( 0, NULL, NULL, NULL, &t );
 #endif
 

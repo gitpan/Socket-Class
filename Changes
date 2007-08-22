@@ -1,4 +1,9 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.0.1
+    - added timeout parameter to connect function
+    - fixed formats of socket option SO_SNDTIMEO and SO_RCVTIMEO on win32
+    - fixed various test scripts
+
 version 1.0.0
     - initial version

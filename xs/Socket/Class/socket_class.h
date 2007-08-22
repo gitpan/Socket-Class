@@ -25,7 +25,7 @@
 #include <ws2tcpip.h>
 #include <tchar.h>
 #include <io.h>
-#else //posix
+#else // posix
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -157,7 +157,7 @@ typedef unsigned short			sa_family_t;
 	( memcpy( (char*)(d), (const char*)(s), (n) * sizeof(t) ) )
 // removed from perl
 
-#ifdef _WIN32 //win32
+#ifdef _WIN32 // win32
 
 #define EWOULDBLOCK				WSAEWOULDBLOCK
 #define ECONNRESET				WSAECONNRESET
@@ -173,7 +173,7 @@ struct sockaddr_un {
 	char						sun_path[108];			// pathname
 };
 
-#else //posix
+#else // posix
 
 #define SOCKET					int
 #define SOCKET_ERROR			-1
@@ -249,8 +249,7 @@ typedef struct st_bdaddr {
 #ifdef _WIN32
 
 #include <pshpack1.h>
-typedef struct st_sockaddr_bt
-{
+typedef struct st_sockaddr_bt {
     sa_family_t		bt_family;
     bdaddr_t		bt_bdaddr;		// Bluetooth device address
     GUID			bt_classid; 	// [OPTIONAL] system will query SDP for port

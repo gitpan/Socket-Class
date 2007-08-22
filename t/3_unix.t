@@ -52,7 +52,7 @@ sub _check {
 }
 
 sub _skip_all {
-	print STDERR "Skipped: probably not supported on this platform\n";
+	print STDERR "Skip: probably not supported on this platform\n";
 	for( ; $_pos <= $_tests; $_pos ++ ) {
 		print "ok $_pos\n";
 	}

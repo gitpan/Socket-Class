@@ -111,8 +111,8 @@ void Socket_error( char *str, DWORD len, long num ) {
 
 void Socket_error( char *str, DWORD len, long num ) {
 	char *s1, *s2;
-	int ret;
 #ifdef SC_DEBUG
+	int ret;
 	ret = snprintf( str, len, "(%d) ", num );
 	len -= ret;
 	s1 = &str[ret];
@@ -305,7 +305,7 @@ int Socket_domainbyname( const char *name ) {
 	else if( strcmp( tmp, "BLUETOOTH" ) == 0 ) {
 		return AF_BLUETOOTH;
 	}
-	else if( is_numeric( name ) ) {
+	else if( name[0] >= '0' && name[0] <= '9' ) {
 		return atoi( name );
 	}
 	return 0;
@@ -323,7 +323,7 @@ int Socket_typebyname( const char *name ) {
 	else if( strcmp( tmp, "RAW" ) == 0 ) {
 		return SOCK_RAW;
 	}
-	else if( is_numeric( name ) ) {
+	else if( name[0] >= '0' && name[0] <= '9' ) {
 		return atoi( name );
 	}
 	return 0;
@@ -347,7 +347,7 @@ int Socket_protobyname( const char *name ) {
 	else if( strcmp( tmp, "L2CAP" ) == 0 ) {
 		return BTPROTO_L2CAP;
 	}
-	else if( is_numeric( name ) ) {
+	else if( name[0] >= '0' && name[0] <= '9' ) {
 		return atoi( name );
 	}
 	else {
@@ -481,7 +481,7 @@ int my_str2ba( const char *str, bdaddr_t *ba ) {
 }
 
 DWORD get_current_thread_id() {
-#ifdef USE_ITHREADS
+#ifdef SC_THREADS
 #ifdef _WIN32
 	return GetCurrentThreadId();
 #else

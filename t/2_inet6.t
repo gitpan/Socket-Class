@@ -13,29 +13,29 @@ if( $Socket::Class::OLDNET ) {
 $sock = Socket::Class->new(
 	'domain' => 'inet6',
 ) or warn Socket::Class->error;
-_check( $sock );
 
-if( $sock ) {
-	$r = $sock->bind( '::1', 0 )
-		or warn "Error: " . $sock->error;
-	_check( $r );
-	$r = $sock->listen()
-		or warn "Error: " . $sock->error;
-	_check( $r );
-	$r = $sock->close()
-		or warn "Error: " . $sock->error;
-	_check( $r );
-	$r = $sock->set_timeout( 1000 );
-	_check( $r );
-	$r = $sock->free();
-	_check( $r );
-	$r = $sock->free();
-	_check( ! $r );
+if( ! $sock ) {
+	_skip_all();
+	goto _end;
 }
-else {
-	_check( 0 );
-	_fail_all();
-}
+
+_check( $sock );
+$r = $sock->bind( '::1', 0 )
+	or warn "Error: " . $sock->error;
+_check( $r );
+$r = $sock->listen()
+	or warn "Error: " . $sock->error;
+_check( $r );
+$r = $sock->close()
+	or warn "Error: " . $sock->error;
+_check( $r );
+$r = $sock->set_timeout( 1000 );
+_check( $r );
+$r = $sock->free();
+_check( $r );
+$r = $sock->free();
+_check( ! $r );
+
 
 BEGIN {
 	$_tests = 7;
@@ -54,7 +54,7 @@ sub _check {
 }
 
 sub _skip_all {
-	print STDERR "Skipped: probably not supported on this platform\n";
+	print STDERR "Skip: probably not supported on this platform\n";
 	for( ; $_pos <= $_tests; $_pos ++ ) {
 		print "ok $_pos\n";
 	}

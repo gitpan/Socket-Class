@@ -13,7 +13,7 @@ use Carp ();
 use vars qw($VERSION);
 
 BEGIN {
-	$VERSION = '1.0.0';
+	$VERSION = '1.0.1';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -28,13 +28,14 @@ END {
 sub import {
 	my $pkg = shift;
 	my $callpkg = caller;
-	return if ! @_;
+	@_ or return;
 	require Socket::Class::Const if ! $Socket::Class::Const::VERSION;
 	&Exporter::export( 'Socket::Class::Const', $callpkg, @_ );
 }
 
 sub printf {
-	@_ >= 2 or &Carp::croak( 'Usage: ' . __PACKAGE__ . '::printf(this, fmt, ...)' );
+	@_ >= 2
+		or &Carp::croak( 'Usage: ' . __PACKAGE__ . '::printf(this,fmt,...)' );
 	my( $sock, $fmt ) = ( shift, shift );
 	return &write( $sock, sprintf( $fmt, @_ ) );
 }
@@ -309,7 +310,7 @@ handle. new optionally takes arguments, these arguments are in key-value pairs.
   reuseaddr      Set SO_REUSEADDR before binding
   blocking       Enable or disable blocking mode; default is enabled
   timeout        Timeout value for various operations as floating point number;
-                 defaults to 15000 (15 seconds)
+                 defaults to 15000 (15 seconds); currently used for connect
 
 If I<local_addr>, I<local_port> or I<local_path> is defined then the socket
 will bind a local address. If I<listen> is defined then the socket will put
@@ -369,7 +370,7 @@ anymore. In this case you should use I<free()>.
 
 =item shutdown ( [$how] )
 
-Disables sends and receives on a socket.
+Disables sends and receives on the socket.
 
 B<Parameters>
 
@@ -500,13 +501,15 @@ I<Non blocking mode>
 
 =over 4
 
-=item connect ( [$addr [, $port]] )
+=item connect ( [$addr [, $port [, $timeout]]] )
+
+=item connect ( [$path [,$timeout]] )
 
 Initiates a connection.
 
 B<Parameters>
 
-I<$addr>
+I<$addr> or I<$path>
 
 On 'inet' family sockets the I<$addr> parameter can be  an IP address in
 dotted-quad notation (e.g. 127.0.0.1) or a valid hostname.
@@ -515,14 +518,18 @@ On 'inet6' family sockets the I<$addr> parameter can be an IPv6 address in
 hexadecimal notation (e.g. 2001:0db8:85a3:08d3:1319:8a2e:0370:7344) or a
 valid hostname.
 
-On 'unix' family sockets the I<$addr> is the pathname of a Unix domain socket.
+On 'unix' family sockets the I<$path> is the pathname of a Unix domain socket.
 
 If I<$addr> is not defined the address from last I<connect> is used.
 
 I<$port>
 
-The I<$port> parameter designates the port or channel on the remote host to
+The I<$port> parameter designates the port or service on the remote host to
 which a connection should be made.
+
+I<$timeout>
+
+Optionally timeout in milliseconds as floating point number.
 
 B<Return Values>
 
@@ -532,7 +539,7 @@ and the error string can be retrieved with L<error()|Socket::Class/error>.
 
 B<Examples>
 
-  $sock->connect( 'www.perl.org', 80 )
+  $sock->connect( 'www.perl.org', 'http' )
       or die "can't connect: " . $sock->error;
 
 
@@ -605,6 +612,10 @@ B<Examples>
   }
   print "sent $r bytes\n";
 
+B<See Also>
+
+L<Socket::Class::Const|Socket::Class::Const>
+
 
 =item recv ( $buf, $len [, $flags] )
 
@@ -639,6 +650,10 @@ B<Return Values>
 Returns the number of bytes received or UNDEF on error.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
+
+B<See Also>
+
+L<Socket::Class::Const|Socket::Class::Const>
 
 
 =item sendto ( $buf [, $to [, $flags]] )
@@ -687,6 +702,10 @@ OR
   );
   
   $sock->sento( 'PING' );
+
+B<See Also>
+
+L<Socket::Class::Const|Socket::Class::Const>
 
 
 =item recvfrom ( $buf, $len [, $flags] )
@@ -751,6 +770,10 @@ I<Non blocking mode>
       ( $r_addr, $r_port ) = $sock->unpack_addr( $paddr );
       print "Incoming message from $r_addr port $r_port\n";
   }
+
+B<See Also>
+
+L<Socket::Class::Const|Socket::Class::Const>
 
 
 =back
@@ -852,7 +875,7 @@ B<Examples>
   $sock->printf( "%.3f", $number );
   
   # does the same like above
-  $sock->print( sprintf( "%.3f", $number ) );
+  $sock->write( sprintf( "%.3f", $number ) );
 
 
 =item say ( ... )
@@ -1109,8 +1132,8 @@ I<$optval> ...
 
 The option value in packed or unpacked format.
 If I<$optval> is an integer value it will be packed as int.
-For SO_LINGER, SO_RCVTIMEO and SO_SNDTIMEO two values are accepted and are
-packed in the right format.
+For SO_LINGER, SO_RCVTIMEO and SO_SNDTIMEO one or two values are accepted
+and are packed in the right format.
 
 B<Return Values>
 
@@ -1129,10 +1152,10 @@ B<Examples>
   # same like
   $sock->set_option( $SOL_SOCKET, $SO_LINGER, pack( 'S!S!', 0, 0 ) );
   
-  # set rcv timeout to 1sec + 100000usec
-  $sock->set_option( $SOL_SOCKET, $SO_RCVTIMEO, 1, 100000 );
-  # same like
-  $sock->set_option( $SOL_SOCKET, $SO_RCVTIMEO, pack( 'l!l!', 1, 100000 ) );
+  # set rcv timeout to 0sec + 100000usec
+  $sock->set_option( $SOL_SOCKET, $SO_RCVTIMEO, 0, 100000 );
+  # or in milliseconds
+  $sock->set_option( $SOL_SOCKET, $SO_RCVTIMEO, 100 );
 
 B<See Also>
 
@@ -1208,6 +1231,8 @@ B<Examples>
   # get rcv timeout
   ( $tv_sec, $tv_usec ) =
       $sock->get_option( $SOL_SOCKET, $SO_RCVTIMEO );
+  # or in milliseconds
+  $ms = $sock->get_option( $SOL_SOCKET, $SO_RCVTIMEO );
 
 B<See Also>
 
@@ -1456,7 +1481,7 @@ from the last occurred error.
   threads->create( \&server_thread, $Server );
   
   while( $RUNNING ) {
-      # do another activities here
+      # do other things here
       # ...
       # sleep for a while
       $Server->wait( 100 );

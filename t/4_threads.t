@@ -1,22 +1,28 @@
-use Config;
+BEGIN {
+	$_tests = 7;
+	unshift @INC, 'blib/lib', 'blib/arch';
+	my $o = select STDOUT;
+	$| = 1;
+	select $o;
+	print "1..$_tests\n";
+
+	require Config;
+	if( ! $Config::Config{'usethreads'} ) {
+		print STDERR "Skip: not supported on this platform\n";
+		for( $_pos = 1; $_pos <= $_tests; $_pos ++ ) {
+			print "ok $_pos\n";
+		}
+		exit( 0 );
+	}
+}
 
 use threads;
 use threads::shared;
 
-print "1..$_tests\n";
-
-no warnings;
-
 require Socket::Class;
 import Socket::Class qw(:all);
 
-if( ! $Config{'usethreads'} ) {
-	_skip_all();
-	goto _end;
-}
-
 our $RUNNING : shared = 1;
-
 our $_pos : shared = 1;
 
 $server = Socket::Class->new(
@@ -59,14 +65,6 @@ _close:
 $RUNNING = 0;
 foreach $thread( threads->list ) {
 	$thread->join();
-}
-
-BEGIN {
-	$_tests = 7;
-	unshift @INC, 'blib/lib', 'blib/arch';
-	my $o = select STDOUT;
-	$| = 1;
-	select $o;
 }
 
 _end:

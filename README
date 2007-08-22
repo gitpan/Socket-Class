@@ -25,7 +25,7 @@ To install this library type the following:
 
 Vista Note:
 Perl wont clearly exit on Windows Vista; the tests by the installation may
-break with dubious result. (using VC 9.0)
+break with dubious result. (tested with VC 9.0)
 
 COPYRIGHT AND LICENCE
 

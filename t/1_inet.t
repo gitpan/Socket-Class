@@ -27,7 +27,6 @@ if( $sock ) {
 	_check( ! $r );
 }
 else {
-	_check( 0 );
 	_fail_all();
 }
 
