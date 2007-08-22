@@ -13,7 +13,7 @@ use Carp ();
 use vars qw($VERSION);
 
 BEGIN {
-	$VERSION = '1.0.2';
+	$VERSION = '1.0.3';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -1550,11 +1550,6 @@ from the last occurred error.
       threads->self->detach() if $RUNNING;
       return 1;
   }
-
-=head1 BUGS
-
-Perl wont clearly exit on Windows Vista; the tests by the
-installation may break with dubious result.
 
 =head1 AUTHORS
 

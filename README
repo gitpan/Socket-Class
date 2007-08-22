@@ -23,10 +23,6 @@ To install this library type the following:
    make test
    make install
 
-Vista Note:
-Perl wont clearly exit on Windows Vista; the tests by the installation may
-break with dubious result. (tested with VC 9.0)
-
 COPYRIGHT AND LICENCE
 
 Copyright (C) 2007 by Christian Mueller

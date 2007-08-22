@@ -22,6 +22,10 @@ if( ! $sock ) {
 _check( $sock );
 $r = $sock->bind( '::1', 0 )
 	or warn "Error: " . $sock->error;
+if( ! $r ) {
+	_skip_all();
+	goto _end;
+}
 _check( $r );
 $r = $sock->listen()
 	or warn "Error: " . $sock->error;
