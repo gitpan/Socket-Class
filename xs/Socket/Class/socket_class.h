@@ -143,8 +143,8 @@ typedef unsigned short			sa_family_t;
 #undef Newx
 #define Newx(v,c,t) \
 	( (v) = ( (t*) malloc( (c) * sizeof(t) ) ) )
-#undef Newxc
-#define Newxc(v,c,t) \
+#undef Newxz
+#define Newxz(v,c,t) \
 	( (v) = ( (t*) calloc( (c), sizeof(t) ) ) )
 #undef Safefree
 #define Safefree(x) \

@@ -1,5 +1,8 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.0.2
+    - fixed internal memory allocation marco "Newxz"
+
 version 1.0.1
     - added timeout parameter to connect function
     - fixed formats of socket option SO_SNDTIMEO and SO_RCVTIMEO on win32

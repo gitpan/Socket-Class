@@ -18,7 +18,6 @@ WriteMakefile(
     VERSION_FROM => 'xs/Socket/Class/Class.pm',
     ABSTRACT => 'Socket class',
     PREREQ_PM => {
-        'Time::HiRes' => 0,
     },
     XSPROTOARG => '-prototypes',
     OPTIMIZE => '-O3',
