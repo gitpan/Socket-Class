@@ -12,7 +12,7 @@ import Socket::Class qw(:all);
 
 $sock = Socket::Class->new(
 	'domain' => 'inet6',
-) or die Socket::Class->error;
+) or warn Socket::Class->error;
 
 if( ! $sock ) {
 	_skip_all();

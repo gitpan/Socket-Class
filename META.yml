@@ -1,7 +1,7 @@
 --- #YAML:1.0
 name:                Socket-Class
-version:             1.0.4
-abstract:            Socket class
+version:             1.0.5
+abstract:            ~
 license:             ~
 generated_by:        ExtUtils::MakeMaker version 6.36
 distribution_type:   module

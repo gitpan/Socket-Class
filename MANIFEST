@@ -1,7 +1,16 @@
+Bluetooth.xs
 Changes
+Class.pm
+Class.xs
 Makefile.PL
 MANIFEST
 README
+sc_bluez.c
+sc_bluez.h
+sc_ws2bth.c
+sc_ws2bth.h
+socket_class.c
+socket_class.h
 examples/inet6_nonblocking.pl
 examples/inet_blocking.pl
 examples/inet_dgram_ping.pl
@@ -14,17 +23,4 @@ t/1_inet.t
 t/2_inet6.t
 t/3_unix.t
 t/4_threads.t
-xs/Makefile.PL
-xs/Socket/Makefile.PL
-xs/Socket/Class/Bluetooth.xs
-xs/Socket/Class/Class.pm
-xs/Socket/Class/Class.xs
-xs/Socket/Class/Makefile.PL
-xs/Socket/Class/sc_bluez.c
-xs/Socket/Class/sc_bluez.h
-xs/Socket/Class/sc_ws2bth.c
-xs/Socket/Class/sc_ws2bth.h
-xs/Socket/Class/socket_class.c
-xs/Socket/Class/socket_class.h
-xs/Socket/Class/t/0_dummy.t
 META.yml                                 Module meta-data (added by MakeMaker)

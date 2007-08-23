@@ -1,5 +1,9 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.0.5
+    - fixed testscript for inet6
+    - changed internal file structure
+
 version 1.0.4
     - added function "select"
     - added some examples to examples/*
