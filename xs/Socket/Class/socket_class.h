@@ -320,12 +320,21 @@ typedef struct st_my_global {
 extern my_global_t global;
 
 #ifdef SC_THREADS
-#define GLOBAL_LOCK()			MUTEX_LOCK( &global.thread_lock )
-#define GLOBAL_UNLOCK()			MUTEX_UNLOCK( &global.thread_lock )
-#define TV_LOCK(tv)				MUTEX_LOCK( &tv->thread_lock )
-#define TV_UNLOCK(tv)			MUTEX_UNLOCK( &tv->thread_lock )
+#define GLOBAL_LOCK() \
+	_debug( "global lock at %s line %d\n", __FILE__, __LINE__ ); \
+	MUTEX_LOCK( &global.thread_lock )
+#define GLOBAL_UNLOCK() \
+	_debug( "global unlock at %s line %d\n", __FILE__, __LINE__ ); \
+	MUTEX_UNLOCK( &global.thread_lock )
+#define TV_LOCK(tv) \
+	_debug( "tv lock %u at %s line %d\n", tv, __FILE__, __LINE__ ); \
+	MUTEX_LOCK( &tv->thread_lock )
+#define TV_UNLOCK(tv) \
+	_debug( "tv unlock %u at %s line %d\n", tv, __FILE__, __LINE__ ); \
+	MUTEX_UNLOCK( &tv->thread_lock )
 #define TV_UNLOCK_SAFE(tv) \
 	if( tv != NULL ) { \
+		_debug( "tv unlock %u at %s line %d\n", tv, __FILE__, __LINE__ ); \
 		MUTEX_UNLOCK( &tv->thread_lock ); \
 	}
 #else // no threads
@@ -335,6 +344,18 @@ extern my_global_t global;
 #define TV_UNLOCK(tv)
 #define TV_UNLOCK_SAFE(tv)		{}
 #endif // threads
+
+#define TV_ERRNOLAST(tv) \
+	(tv)->last_error[0] = '\0'; \
+	(tv)->last_errno = Socket_errno()
+
+#define TV_ERRNO(tv,code) \
+	(tv)->last_error[0] = '\0'; \
+	(tv)->last_errno = code
+
+#define TV_ERROR(tv,str) \
+	my_strncpy( (tv)->last_error, str, sizeof( (tv)->last_error ) ); \
+	(tv)->last_errno = -1
 
 void my_thread_var_add( my_thread_var_t *tv );
 void my_thread_var_rem( my_thread_var_t *tv );

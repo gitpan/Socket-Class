@@ -1,10 +1,17 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.0.4
+    - added function "select"
+    - added some examples to examples/*
+    - added some custom error messages
+    - fixed internal mutex locking and unlocking
+    - fixed internal error handling
+
 version 1.0.3
     - bug on Windows Vista is fixed
 
 version 1.0.2
-    - fixed internal memory allocation marco "Newxz"
+    - fixed internal memory allocation macro "Newxz"
 
 version 1.0.1
     - added timeout parameter to connect function

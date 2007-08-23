@@ -5,14 +5,14 @@ no warnings;
 require Socket::Class;
 import Socket::Class qw(:all);
 
-if( $Socket::Class::OLDNET ) {
-	_skip_all();
-	goto _end;
-}
+#if( $Socket::Class::OLDNET ) {
+#	_skip_all();
+#	goto _end;
+#}
 
 $sock = Socket::Class->new(
 	'domain' => 'inet6',
-) or warn Socket::Class->error;
+) or die Socket::Class->error;
 
 if( ! $sock ) {
 	_skip_all();

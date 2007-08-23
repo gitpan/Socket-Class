@@ -13,7 +13,7 @@ use Carp ();
 use vars qw($VERSION);
 
 BEGIN {
-	$VERSION = '1.0.3';
+	$VERSION = '1.0.4';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -170,6 +170,7 @@ L<fileno|Socket::Class/fileno>,
 L<handle|Socket::Class/handle>,
 L<is_readable|Socket::Class/is_readable>,
 L<is_writable|Socket::Class/is_writable>,
+L<select|Socket::Class/select>,
 L<state|Socket::Class/state>,
 L<to_string|Socket::Class/to_string>,
 L<wait|Socket::Class/wait>
@@ -421,11 +422,13 @@ Closes the socket and frees all internally allocated resources.
 
 =item bind ( [$addr [, $port]] )
 
+=item bind ( [$path] )
+
 Binds the socket to a specified local address.
 
 B<Parameters>
 
-I<$addr>
+I<$addr> or I<$path>
 
 On 'inet' family sockets the I<$addr> parameter can be  an IP address in
 dotted-quad notation (e.g. 127.0.0.1) or a valid hostname.
@@ -434,7 +437,7 @@ On 'inet6' family sockets the I<$addr> parameter can be an IPv6 address in
 hexadecimal notation (e.g. 2001:0db8:85a3:08d3:1319:8a2e:0370:7344) or a
 valid hostname.
 
-On 'unix' family sockets the I<$addr> is the pathname of a Unix domain socket.
+On 'unix' family sockets the I<$path> is the pathname of a Unix domain socket.
 
 If I<$addr> is not defined the address from last I<bind> is used.
 
@@ -475,7 +478,10 @@ B<Examples>
 I<Blocking mode (default)>
 
   while( $client = $sock->accept() ) {
+      # do something with the connection
       print "Incoming connection: ", $client->to_string, "\n";
+      ...
+      $client->free();
   }
 
 I<Non blocking mode>
@@ -491,7 +497,10 @@ I<Non blocking mode>
           $sock->wait( 10 );
           next;
       }
+      # do something with the connection
       print "Incoming connection: ", $client->to_string, "\n";
+      ...
+      $client->free();
   }
 
 
@@ -1389,6 +1398,116 @@ Return 1 if the socket is writable, or 0 if it is not, or UNDEF on error.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
+
+=item select ( [$read [, $write [, $error [, $timeout]]]] )
+
+Runs the I<select()> system call on the socket with a specified timeout.
+
+B<Parameters>
+
+I<$read> [in/out]
+
+If the I<$read> parameter is set, then the socket will be watched to see if
+characters become available for reading.
+Out: Indicates the state of readability.
+
+I<$write> [in/out]
+
+If the I<$write> parameter is set, then the socket will be watched to see if
+a write will not block.
+Out: Indicates the state of writability.
+
+I<$except> [in/out]
+
+If the I<$except> parameter is set, then the socket will be watched for
+exceptions.
+Out: Indicates the a socket exception.
+
+I<$timeout>
+
+The timeout in milliseconds as a floating point value.
+If I<$timeout> is initialized to 0, is_writable will return immediately;
+this is used to poll the writability of the socket.
+If the value is undef (no timeout), I<select()> can block indefinitely.
+
+B<Return Values>
+
+Returns a number between 0 to 3 which indicates the parameters set to TRUE, or
+UNDEF on error.
+The error code can be retrieved with L<errno()|Socket::Class/errno>
+and the error string can be retrieved with L<error()|Socket::Class/error>. 
+
+B<Remarks>
+
+In summary, the socket will be identified in a particular set when select
+returns if:
+
+I<read:>
+
+=over 4
+
+=item *
+
+If listen has been called and a connection is pending, accept will succeed. 
+
+=item *
+
+Data is available for reading (includes OOB data if SO_OOBINLINE is enabled). 
+
+=item *
+
+Connection has been closed/reset/terminated. 
+
+=back
+
+I<write:>
+
+=over 4
+
+=item *
+
+If processing a connect call (nonblocking), connection has succeeded. 
+
+=item *
+
+Data can be sent. 
+
+=back
+
+I<except:>
+
+=over 4
+
+=item *
+
+If processing a connect call (nonblocking), connection attempt failed. 
+
+=item *
+
+OOB data is available for reading (only if SO_OOBINLINE is disabled). 
+
+=back
+
+B<Examples>
+
+  # watch all states and return within 1 second
+  $v = $sock->select( $r = 1, $w = 1, $e = 1, 1000 );
+  if( ! defined $v ) {
+      die $sock->error;
+  }
+  if( $e ) {
+      # socket error
+      $e = $sock->get_option( $SOL_SOCKET, $SO_ERROR );
+      die $sock->error( $e );
+  }
+  if( $r ) {
+      # socket is readable
+      ...
+  }
+  if( $w ) {
+      # socket is writable
+      ...
+  }
 
 =item state ()
 

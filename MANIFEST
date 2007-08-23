@@ -2,6 +2,11 @@ Changes
 Makefile.PL
 MANIFEST
 README
+examples/inet6_nonblocking.pl
+examples/inet_blocking.pl
+examples/inet_dgram_ping.pl
+examples/inet_nonblock_10clients.pl
+examples/unix_blocking.pl
 lib/Socket/Class/Async.pm
 lib/Socket/Class/Const.pm
 t/0_basic.t

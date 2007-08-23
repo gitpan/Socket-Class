@@ -54,9 +54,9 @@ my_thread_var_t *my_thread_var_find( SV *sv ) {
 	register my_thread_var_t *tvf, *tvl, *tv;
 	if( global.destroyed )
 		return NULL;
-	GLOBAL_LOCK();
 	if( ! SvROK( sv ) || ! ( sv = SvRV( sv ) ) || ! SvIOK( sv ) ) return NULL;
 	tv = INT2PTR( my_thread_var_t *, SvIV( sv ) );
+	GLOBAL_LOCK();
 	//_debug( "looking for tv %u\n", tv );
 	tvf = global.first_thread;
 	tvl = global.last_thread;
@@ -185,8 +185,9 @@ int Socket_setaddr_INET( tv, host, port, use )
 				in->sin_addr.s_addr = inet_addr( host );
 			else {
 				he = gethostbyname( host );
-				if( he == NULL )
-					return SOCKET_ERROR;
+				if( he == NULL ) {
+					goto error;
+				}
 				in->sin_addr.s_addr = inet_addr( he->h_addr );
 			}
 		}
@@ -197,7 +198,7 @@ int Socket_setaddr_INET( tv, host, port, use )
 				struct servent *se;
 				se = getservbyname( port, NULL );
 				if( se == NULL )
-					return SOCKET_ERROR;
+					goto error;
 				in->sin_port = se->s_port;
 			}
 		}
@@ -210,16 +211,16 @@ int Socket_setaddr_INET( tv, host, port, use )
 		if( host != NULL ) {
 			if( ( host[0] >= '0' && host[0] <= '9' ) || host[0] == ':' ) {
 				if( inet_pton( AF_INET6, host, &in6->sin6_addr ) != 0 ) {
-					_debug( "inet_pton failed %d", Socket_errno() );
-					return SOCKET_ERROR;
+					_debug( "inet_pton failed %d\n", Socket_errno() );
+					goto error;
 				}
 			}
 			else {
 				he = gethostbyname( host );
 				if( he == NULL )
-					return SOCKET_ERROR;
+					goto error;
 				if( he->h_addrtype != AF_INET6 )
-					return SOCKET_ERROR;
+					goto error;
 				Copy( he->h_addr, &in6->sin6_addr, he->h_length, char );
 			}
 		}
@@ -230,11 +231,16 @@ int Socket_setaddr_INET( tv, host, port, use )
 				struct servent *se;
 				se = getservbyname( port, NULL );
 				if( se == NULL )
-					return SOCKET_ERROR;
+					goto error;
 				in6->sin6_port = se->s_port;
 			}
 		}
 	}
+	goto exit;
+error:
+	GLOBAL_UNLOCK();
+	return Socket_errno();
+exit:
 	GLOBAL_UNLOCK();
 #endif
 	return 0;
@@ -364,7 +370,7 @@ int Socket_setopt( SV *this, int level, int optname, const void *optval, socklen
 	if( tv != NULL ) {
 		TV_LOCK( tv );
 		r = setsockopt( tv->sock, level, optname, optval, optlen );
-		tv->last_errno = r == SOCKET_ERROR ? Socket_errno() : 0;
+		TV_ERRNO( tv, r == SOCKET_ERROR ? Socket_errno() : 0 );
 		TV_UNLOCK( tv );
 		return r;
 	}
@@ -380,7 +386,7 @@ int Socket_getopt( SV *this, int level, int optname, void *optval, socklen_t *op
 	if( tv != NULL ) {
 		TV_LOCK( tv );
 		r = getsockopt( tv->sock, level, optname, optval, optlen );
-		tv->last_errno = r == SOCKET_ERROR ? Socket_errno() : 0;
+		TV_ERRNO( tv, r == SOCKET_ERROR ? Socket_errno() : 0 );
 		TV_UNLOCK( tv );
 		return r;
 	}
@@ -422,7 +428,7 @@ int Socket_write( SV *this, const char *buf, size_t len ) {
 		if( r == SOCKET_ERROR ) {
 			if( pos > 0 )
 				break;
-			tv->last_errno = Socket_errno();
+			TV_ERRNOLAST( tv );
 			switch( tv->last_errno ) {
 			case EWOULDBLOCK:
 				// threat not as an error
@@ -440,7 +446,7 @@ int Socket_write( SV *this, const char *buf, size_t len ) {
 		else if( r == 0 ) {
 			if( pos > 0 )
 				break;
-			tv->last_errno = ECONNRESET;
+			TV_ERRNO( tv, ECONNRESET );
 			_debug( "write error %u\n", tv->last_errno );
 			tv->state = SOCK_STATE_ERROR;
 			r = SOCKET_ERROR;
@@ -451,7 +457,7 @@ int Socket_write( SV *this, const char *buf, size_t len ) {
 			len -= r;
 		}
 	}
-	tv->last_errno = 0;
+	TV_ERRNO( tv, 0 );
 	r = (int) pos;
 exit:
 	TV_UNLOCK( tv );

@@ -381,6 +381,7 @@ PPCODE:
 	if( ( tv = my_thread_var_find( this ) ) == NULL )
 		goto error;
 	TV_LOCK( tv );
+	tv->last_error[0] = '\0';
 	switch( tv->s_domain ) {
 	case AF_INET:
 	case AF_INET6:
@@ -599,8 +600,9 @@ PREINIT:
 	const char *s1, *s2;
 PPCODE:
 	if( ( tv = my_thread_var_find( this ) ) == NULL )
-		goto error;
+		goto exit;
 	TV_LOCK( tv );
+	tv->last_error[0] = '\0';
 	switch( tv->s_domain ) {
 	case AF_INET:
 	case AF_INET6:
@@ -611,19 +613,19 @@ PPCODE:
 			s2 = SvPV( ST(2), l1 );
 			tv->last_errno = Socket_setaddr_INET( tv, s1, s2, ADDRUSE_LISTEN );
 			if( tv->last_errno != 0 )
-				goto error;
+				goto exit;
 			break;
 		case 2:
 			s1 = SvPV( ST(1), l1 );
 			tv->last_errno = Socket_setaddr_INET( tv, s1, NULL, ADDRUSE_LISTEN );
 			if( tv->last_errno != 0 )
-				goto error;
+				goto exit;
 			break;
 		case 1:
 			if( tv->state != SOCK_STATE_CLOSED ) {
 				tv->last_errno = Socket_setaddr_INET( tv, NULL, NULL, ADDRUSE_LISTEN );
 				if( tv->last_errno != 0 )
-					goto error;
+					goto exit;
 			}
 			break;
 		}
@@ -647,22 +649,19 @@ PPCODE:
 		tv->sock = socket( tv->s_domain, tv->s_type, tv->s_proto );
 		if( tv->sock == INVALID_SOCKET ) {
 			tv->last_errno = Socket_errno();
-			goto error;
+			goto exit;
 		}
 	}
 	if( bind( tv->sock, (struct sockaddr *) tv->l_addr.a, tv->l_addr.l )
 		== SOCKET_ERROR
 	) {
 		tv->last_errno = Socket_errno();
-		goto error;
+		goto exit;
 	}
 	getsockname( tv->sock, (struct sockaddr *) tv->l_addr.a, &tv->l_addr.l );
 	tv->state = SOCK_STATE_BOUND;
 	tv->last_errno = 0;
 	XPUSHs( sv_2mortal( newSViv( 1 ) ) );
-	goto exit;
-error:
-	XPUSHs( &PL_sv_undef );
 exit:
 	TV_UNLOCK_SAFE( tv );
 
@@ -682,11 +681,11 @@ PPCODE:
 	if( tv != NULL ) {
 		TV_LOCK( tv );
 		if( listen( tv->sock, queue ) == SOCKET_ERROR ) {
-			tv->last_errno = Socket_errno();
+			TV_ERRNOLAST( tv );
 			XPUSHs( &PL_sv_undef );
 		}
 		else {
-			tv->last_errno = 0;
+			TV_ERRNO( tv, 0 );
 			tv->state = SOCK_STATE_LISTEN;
 			XPUSHs( sv_2mortal( newSViv( 1 ) ) );
 		}
@@ -714,7 +713,7 @@ PPCODE:
 		addr.l = SOCKADDR_SIZE_MAX;
 		s = accept( tv->sock, (struct sockaddr *) addr.a, &addr.l );
 		if( s == INVALID_SOCKET ) {			
-			tv->last_errno = Socket_errno();
+			TV_ERRNOLAST( tv );
 			switch( tv->last_errno ) {
 			case EWOULDBLOCK:
 				// threat not as an error
@@ -771,7 +770,7 @@ PPCODE:
 		}
 		r = recv( tv->sock, tv->rcvbuf, (int) len, flags );
 		if( r == SOCKET_ERROR ) {
-			tv->last_errno = Socket_errno();
+			TV_ERRNOLAST( tv );
 			switch( tv->last_errno ) {
 			case EWOULDBLOCK:
 				// threat not as an error
@@ -821,7 +820,7 @@ PPCODE:
 		msg = SvPV( buf, len );
 		r = send( tv->sock, msg, (int) len, flags );
 		if( r == SOCKET_ERROR ) {
-			tv->last_errno = Socket_errno();
+			TV_ERRNOLAST( tv );
 			switch( tv->last_errno ) {
 			case EWOULDBLOCK:
 				// threat not as an error
@@ -877,7 +876,7 @@ PPCODE:
 			(struct sockaddr *) peer.a, &peer.l
 		);
 		if( r == SOCKET_ERROR ) {
-			tv->last_errno = Socket_errno();
+			TV_ERRNOLAST( tv );
 			switch( tv->last_errno ) {
 			case EWOULDBLOCK:
 				// threat not as an error
@@ -948,7 +947,7 @@ PPCODE:
 			(struct sockaddr *) peer->a, peer->l
 		);
 		if( r == SOCKET_ERROR ) {
-			tv->last_errno = Socket_errno();
+			TV_ERRNOLAST( tv );
 			switch( tv->last_errno ) {
 			case EWOULDBLOCK:
 				// threat not as an error
@@ -1002,7 +1001,7 @@ PPCODE:
 			if( r == SOCKET_ERROR ) {
 				if( pos > 0 )
 					break;
-				tv->last_errno = Socket_errno();
+				TV_ERRNOLAST( tv );
 				switch( tv->last_errno ) {
 				case EWOULDBLOCK:
 					// threat not as an error
@@ -1250,8 +1249,7 @@ _default:
 		r = getaddrinfo( s1, s2, &aih, &ail );
 		if( r != 0 ) {
 			_debug( "getaddrinfo('%s', '%s') failed %d\n", s1, s2, r );
-			tv->last_errno = r;
-			tv->last_error[0] = '\0';
+			TV_ERRNO( tv, r );
 			goto exit;
 		}
 		saddr.l = (socklen_t) ail->ai_addrlen;
@@ -1261,6 +1259,7 @@ _default:
 		break;
 #else
 	case AF_INET:
+		GLOBAL_LOCK();
 		s1 = SvPV( addr, len );
 		saddr.l = sizeof( struct sockaddr_in );
 		memset( saddr.a, 0, saddr.l );
@@ -1270,8 +1269,10 @@ _default:
 		}
 		else {
 			he = gethostbyname( s1 );
-			if( he == NULL )
-				goto exit;
+			if( he == NULL ) {
+				TV_ERRNOLAST( tv );
+				goto _inet4e;
+			}
 			((struct sockaddr_in *) saddr.a)->sin_addr.s_addr =
 				inet_addr( he->h_addr );
 		}
@@ -1283,32 +1284,39 @@ _default:
 				struct servent *se;
 				se = getservbyname( s1, NULL );
 				if( se == NULL ) {
-					tv->last_errno = Socket_errno();
-					tv->last_error[0] = '\0';
-					goto exit;
+					TV_ERRNOLAST( tv );
+					goto _inet4e;
 				}
 				((struct sockaddr_in *) saddr.a)->sin_port = se->s_port;
 			}
 		}
 		XPUSHs( sv_2mortal( newSVpvn( (char *) &saddr, MYSASIZE(saddr) ) ) );
+_inet4e:
+		GLOBAL_UNLOCK();
 		break;
 	case AF_INET6:
+		GLOBAL_LOCK();
 		s1 = SvPV( addr, len );
 		saddr.l = sizeof( struct sockaddr_in6 );
 		memset( saddr.a, 0, saddr.l );
 		((struct sockaddr_in6 *) saddr.a)->sin6_family = AF_INET6;
 		if( ( s1[0] >= '0' && s1[0] <= '9' ) || s1[0] == ':' ) {
 			if( inet_pton( AF_INET6, s1, &((struct sockaddr_in6 *) saddr.a)->sin6_addr ) != 0 ) {
-				_debug( "inet_pton failed %d", Socket_errno() );
-				goto exit;
+				_debug( "inet_pton failed %d\n", Socket_errno() );
+				TV_ERRNOLAST( tv );
+				goto _inet6e;
 			}
 		}
 		else {
 			he = gethostbyname( s1 );
-			if( he == NULL )
-				goto exit;
-			if( he->h_addrtype != AF_INET6 )
-				goto exit;
+			if( he == NULL ) {
+				TV_ERRNOLAST( tv );
+				goto _inet6e;
+			}
+			if( he->h_addrtype != AF_INET6 ) {
+				TV_ERROR( tv, "invalid address family type" );
+				goto _inet6e;
+			}
 			Copy( he->h_addr, &((struct sockaddr_in6 *) saddr.a)->sin6_addr, he->h_length, char );
 		}
 		if( items > 2 ) {
@@ -1319,14 +1327,15 @@ _default:
 				struct servent *se;
 				se = getservbyname( s1, NULL );
 				if( se == NULL ) {
-					tv->last_errno = Socket_errno();
-					tv->last_error[0] = '\0';
-					goto exit;
+					TV_ERRNOLAST( tv );
+					goto _inet6e;
 				}
 				((struct sockaddr_in6 *) saddr.a)->sin6_port = se->s_port;
 			}
 		}
 		XPUSHs( sv_2mortal( newSVpvn( (char *) &saddr, MYSASIZE(saddr) ) ) );
+_inet6e:
+		GLOBAL_UNLOCK();
 		break;
 	default:
 _default:
@@ -1440,8 +1449,7 @@ PPCODE:
 		r = getaddrinfo( s1, NULL, &aih, &ail );
 		if( r != 0 ) {
 			_debug( "getaddrinfo() failed %d\n", r );
-			tv->last_errno = r;
-			tv->last_error[0] = '\0';
+			TV_ERRNO( tv, r );
 			goto exit;
 		}
 		sa2.l = (int) ail->ai_addrlen;
@@ -1457,36 +1465,38 @@ PPCODE:
 	);
 	if( r != 0 ) {
 		_debug( "getnameinfo() failed %d\n", r );
-		tv->last_errno = Socket_errno();
-		tv->last_error[0] = '\0';
+		TV_ERRNOLAST( tv );
 		goto exit;
 	}
 	XPUSHs( sv_2mortal( newSVpvn( host, strlen( host ) ) ) );
 #else
+	GLOBAL_LOCK();
 	if( l1 <= sizeof( int ) || l1 != MYSASIZE(*saddr) ) {
 		if( tv->s_domain == AF_INET ) {
-			if( inet_aton( s1, &ia4 ) == 0 )
-				goto exit;
+			if( inet_aton( s1, &ia4 ) == 0 ) {
+				TV_ERROR( tv, "invalid address" );
+				goto unlock;
+			}
 			he = gethostbyaddr( (const char *) &ia4, sizeof( ia4 ), AF_INET );
-			if( he != NULL ) {
-				XPUSHs( sv_2mortal( newSVpvn( he->h_name, strlen( he->h_name ) ) ) );
-				goto exit;
+			if( he == NULL ) {
+				TV_ERRNOLAST( tv );
+				goto unlock;
 			}
-			else {
-				tv->last_errno = Socket_errno();
-			}
+			TV_ERRNO( tv, 0 );
+			XPUSHs( sv_2mortal( newSVpvn( he->h_name, strlen( he->h_name ) ) ) );
 		}
 		else if( tv->s_domain == AF_INET6 ) {
-			if( inet_pton( AF_INET6, s1, &ia6 ) <= 0 )
-				goto exit;
+			if( inet_pton( AF_INET6, s1, &ia6 ) <= 0 ) {
+				TV_ERROR( tv, "invalid address" );
+				goto unlock;
+			}
 			he = gethostbyaddr( (const char *) &ia6, sizeof( ia6 ), AF_INET6 );
-			if( he != NULL ) {
-				XPUSHs( sv_2mortal( newSVpvn( he->h_name, strlen( he->h_name ) ) ) );
-				goto exit;
+			if( he == NULL ) {
+				TV_ERRNOLAST( tv );
+				goto unlock;
 			}
-			else {
-				tv->last_errno = Socket_errno();
-			}
+			TV_ERRNO( tv, 0 );
+			XPUSHs( sv_2mortal( newSVpvn( he->h_name, strlen( he->h_name ) ) ) );
 		}
 	}
 	else {
@@ -1503,16 +1513,18 @@ PPCODE:
 			);
 		}
 		else {
-			goto exit;
+			TV_ERRNO( tv, 0 );
+			goto unlock;
 		}
-		if( he != NULL ) {
-			XPUSHs( sv_2mortal( newSVpvn( he->h_name, strlen( he->h_name ) ) ) );
-			goto exit;
+		if( he == NULL ) {
+			TV_ERRNOLAST( tv );
+			goto unlock;
 		}
-		else {
-			tv->last_errno = Socket_errno();
-		}
+		TV_ERRNO( tv, 0 );
+		XPUSHs( sv_2mortal( newSVpvn( he->h_name, strlen( he->h_name ) ) ) );
 	}
+unlock:
+	GLOBAL_UNLOCK();
 #endif
 exit:
 	TV_UNLOCK_SAFE( tv );
@@ -1535,11 +1547,11 @@ PPCODE:
 		TV_LOCK( tv );
 		r = Socket_setblocking( tv->sock, value );
 		if( r == SOCKET_ERROR ) {
-			tv->last_errno = Socket_errno();
+			TV_ERRNOLAST( tv );
 			XPUSHs( &PL_sv_undef );
 		}
 		else {
-			tv->last_errno = 0;
+			TV_ERRNO( tv, 0 );
 			tv->non_blocking = (BYTE) ! value;
 			XPUSHs( sv_2mortal( newSViv( 1 ) ) );
 		}
@@ -1836,6 +1848,11 @@ PPCODE:
 		TV_LOCK( tv );
 		l = sizeof( tmp );
 		r = getsockopt( tv->sock, level, optname, tmp, &l );
+		if( r == SOCKET_ERROR ) {
+			TV_ERRNOLAST( tv );
+			goto _set;
+		}
+		TV_ERRNO( tv, 0 );
 		if( level = SOL_SOCKET ) {
 			switch( optname ) {
 			case SO_LINGER:
@@ -1997,11 +2014,12 @@ PPCODE:
 			);
 		}
 		if( ret < 0 ) {
-			tv->last_errno = Socket_errno();
+			TV_ERRNOLAST( tv );
 			_debug( "is_readable error %u\n", tv->last_errno );
 			tv->state = SOCK_STATE_ERROR;
 		}
 		else {
+			TV_ERRNO( tv, 0 );
 			XPUSHs( sv_2mortal( newSViv( ret ) ) );
 		}
 		TV_UNLOCK( tv );
@@ -2042,12 +2060,87 @@ PPCODE:
 			);
 		}
 		if( ret < 0 ) {
-			tv->last_errno = Socket_errno();
+			TV_ERRNOLAST( tv );
 			_debug( "is_writable error %u\n", tv->last_errno );
 			tv->state = SOCK_STATE_ERROR;
 		}
 		else {
+			TV_ERRNO( tv, 0 );
 			XPUSHs( sv_2mortal( newSViv( ret ) ) );
+		}
+		TV_UNLOCK( tv );
+	}
+
+
+#/*****************************************************************************
+# * select( this [, read [, write [, error [, timeout]]]] )
+# *****************************************************************************/
+
+void
+select( this, read = NULL, write = NULL, except = NULL, timeout = NULL )
+	SV *this;
+	SV *read;
+	SV *write;
+	SV *except;
+	SV *timeout;
+PREINIT:
+	my_thread_var_t *tv;
+	fd_set fdr, fdw, fde;
+	struct timeval t, *pt;
+	int ret, dr, dw, de;
+	double ms;
+PPCODE:
+	tv = my_thread_var_find( this );
+	if( tv != NULL ) {
+		TV_LOCK( tv );
+		if( read != NULL && SvOK( read ) ) {
+			dr = SvTRUE( read );
+			if( dr ) {
+				FD_ZERO( &fdr );
+				FD_SET( tv->sock, &fdr );
+			}
+		}
+		if( write != NULL && SvOK( write ) ) {
+			dw = SvTRUE( write );
+			if( dw ) {
+				FD_ZERO( &fdw );
+				FD_SET( tv->sock, &fdw );
+			}
+		}
+		if( except != NULL && SvOK( except ) ) {
+			de = SvTRUE( except );
+			if( de ) {
+				FD_ZERO( &fde );
+				FD_SET( tv->sock, &fde );
+			}
+		}
+		if( timeout != NULL ) {
+			ms = SvNV( timeout );
+			t.tv_sec = (long) (ms / 1000);
+			t.tv_usec = (long) (ms * 1000) % 1000000;
+			pt = &t;
+		}
+		else {
+			pt = NULL;
+		}
+		ret = select(
+			(int) (tv->sock + 1), (dr ? &fdr : NULL), (dw ? &fdw : NULL),
+			(de ? &fde : NULL), pt
+		);
+		if( ret < 0 ) {
+			TV_ERRNOLAST( tv );
+			_debug( "select error %u\n", tv->last_errno );
+			tv->state = SOCK_STATE_ERROR;
+		}
+		else {
+			TV_ERRNO( tv, 0 );
+			XPUSHs( sv_2mortal( newSViv( ret ) ) );
+			if( dr && ! SvREADONLY( read ) )
+				sv_setiv( read, FD_ISSET( tv->sock, &fdr ) ? 1 : 0 );
+			if( dw && ! SvREADONLY( write ) )
+				sv_setiv( write, FD_ISSET( tv->sock, &fdw ) ? 1 : 0 );
+			if( de && ! SvREADONLY( except ) )
+				sv_setiv( except, FD_ISSET( tv->sock, &fde ) ? 1 : 0 );
 		}
 		TV_UNLOCK( tv );
 	}
@@ -2530,7 +2623,7 @@ PPCODE:
 		TV_LOCK( tv );
 		if( ! code )
 			code = tv->last_errno;
-		if( code )
+		if( code > 0 )
 			Socket_error(
 				tv->last_error, sizeof( tv->last_error ), code
 			);
@@ -2539,7 +2632,7 @@ PPCODE:
 	else {
 		if( ! code )
 			code = global.last_errno;
-		if( code )
+		if( code > 0 )
 			Socket_error(
 				global.last_error, sizeof( global.last_error ), code
 			);
