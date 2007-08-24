@@ -1,14 +1,18 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.0.6
+    - documentation updated
+    - fixed sockt settings on parameters 'local_path' and 'remote_path'
+      called by new()
+
 version 1.0.5
     - fixed testscript for inet6
     - changed internal file structure
 
 version 1.0.4
     - added function "select"
-    - added some examples to examples/*
-    - added some custom error messages
-    - fixed internal mutex locking and unlocking
+    - added examples to examples/*
+    - fixed broken internal mutex handling
     - fixed internal error handling
 
 version 1.0.3

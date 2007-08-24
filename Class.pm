@@ -13,7 +13,7 @@ use Carp ();
 use vars qw($VERSION);
 
 BEGIN {
-	$VERSION = '1.0.5';
+	$VERSION = '1.0.6';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -294,7 +294,8 @@ L<is_error|Socket::Class/is_error>
 =item new ( [%arg] )
 
 Creates a Socket::Class object, which is a reference to a newly created socket
-handle. new optionally takes arguments, these arguments are in key-value pairs.
+handle. I<new()> optionally takes arguments, these arguments are in key-value
+pairs.
 
   remote_addr    Remote host address             <hostname> | <hostaddr>
   remote_port    Remote port or service          <service> | <number>
@@ -316,7 +317,7 @@ handle. new optionally takes arguments, these arguments are in key-value pairs.
 If I<local_addr>, I<local_port> or I<local_path> is defined then the socket
 will bind a local address. If I<listen> is defined then the socket will put
 into listen state. If I<remote_addr>, I<remote_port> or I<remote_path> is
-defined then connect() is called.
+defined then I<connect()> is called.
 
 Standard I<domain> is AF_INET. Standard I<type> is SOCK_STREAM. Standard
 I<proto> is IPPROTO_TCP. If I<local_path> or I<remote_path> is defined the
@@ -378,13 +379,13 @@ B<Parameters>
 I<$how>
 
 One of the following values that specifies the operation that will no longer
-be allowed.
+be allowed. Default is $SD_SEND.
 
   Num   Const         Description
   ----------------------------------------------------------------------
-  1     $SD_SEND      Disable sending on the socket.
-  2     $SD_RECEIVE   Disable receiving on the socket.
-  3     $SD_BOTH      Disable both sending and receiving on the socket.
+  0     $SD_SEND      Disable sending on the socket.
+  1     $SD_RECEIVE   Disable receiving on the socket.
+  2     $SD_BOTH      Disable both sending and receiving on the socket.
 
 B<Return Values>
 
@@ -1399,7 +1400,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item select ( [$read [, $write [, $error [, $timeout]]]] )
+=item select ( [$read [, $write [, $except [, $timeout]]]] )
 
 Runs the I<select()> system call on the socket with a specified timeout.
 
@@ -1407,27 +1408,27 @@ B<Parameters>
 
 I<$read> [in/out]
 
-If the I<$read> parameter is set, then the socket will be watched to see if
+If the I<$read> parameter is set, the socket will be watched to see if
 characters become available for reading.
 Out: Indicates the state of readability.
 
 I<$write> [in/out]
 
-If the I<$write> parameter is set, then the socket will be watched to see if
+If the I<$write> parameter is set, the socket will be watched to see if
 a write will not block.
 Out: Indicates the state of writability.
 
 I<$except> [in/out]
 
-If the I<$except> parameter is set, then the socket will be watched for
+If the I<$except> parameter is set, the socket will be watched for
 exceptions.
-Out: Indicates the a socket exception.
+Out: Indicates a socket exception.
 
 I<$timeout>
 
 The timeout in milliseconds as a floating point value.
-If I<$timeout> is initialized to 0, is_writable will return immediately;
-this is used to poll the writability of the socket.
+If I<$timeout> is initialized to 0, select will return immediately;
+this is used to poll the state of the socket.
 If the value is undef (no timeout), I<select()> can block indefinitely.
 
 B<Return Values>
@@ -1664,7 +1665,6 @@ from the last occurred error.
       # close the client and free allocated resources
       $client->wait( 50 );
       $client->free();
-      $client->wait( 50 );
       # detach thread
       threads->self->detach() if $RUNNING;
       return 1;

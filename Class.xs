@@ -160,18 +160,24 @@ PPCODE:
 				tv->s_type = SOCK_DGRAM;
 			}
 		}
-		else if( strcmp( key, "local_addr" ) == 0
-			|| strcmp( key, "local_path" ) == 0
-		) {
+		else if( strcmp( key, "local_addr" ) == 0 ) {
 			la = SvPV( ST(i + 1), lval );
+		}
+		else if( strcmp( key, "local_path" ) == 0 ) {
+			la = SvPV( ST(i + 1), lval );
+			tv->s_domain = AF_UNIX;
+			tv->s_proto = 0;
 		}
 		else if( strcmp( key, "local_port" ) == 0 ) {
 			lp = SvPV( ST(i + 1), lval );
 		}
-		else if( strcmp( key, "remote_addr" ) == 0
-			|| strcmp( key, "remote_path" ) == 0
-		) {
+		else if( strcmp( key, "remote_addr" ) == 0 ) {
 			ra = SvPV( ST(i + 1), lval );
+		}
+		else if( strcmp( key, "remote_path" ) == 0 ) {
+			ra = SvPV( ST(i + 1), lval );
+			tv->s_domain = AF_UNIX;
+			tv->s_proto = 0;
 		}
 		else if( strcmp( key, "remote_port" ) == 0 ) {
 			rp = SvPV( ST(i + 1), lval );

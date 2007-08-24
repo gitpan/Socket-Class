@@ -74,7 +74,7 @@ our $SO_ACCEPTCON		= $WIN ? 0x0002 : 80;
 # tcp options
 our $TCP_NODELAY		= 1;
 
-# shutdown options
+# shutdown values
 our $SD_RECEIVE			= 0;
 our $SD_SEND			= 1;
 our $SD_BOTH			= 2;
