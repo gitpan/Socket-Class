@@ -19,9 +19,8 @@ $server = Socket::Class->new(
 
 threads->create( \&server_thread, $server );
 
-$client = Socket::Class->new(
-	'proto' => 'udp',
-) or die Socket::Class->error;
+$client = Socket::Class->new( 'proto' => 'udp' )
+	or die Socket::Class->error;
 
 $paddr = $client->pack_addr( '127.0.0.1', $server->local_port );
 
@@ -50,13 +49,12 @@ while( 1 ) {
 		$pingtime += ( &microtime() - $arg );
 	}
 	if( ( $pingcount % 100 ) == 0 ) {
-		$ac = $pingtime / $pingcount;
-		$ac = sprintf( '%0.3f', $ac * 1000 );
-		print "average ping time $ac ms\n";
+		$apt = sprintf( '%0.3f', ( $pingtime / $pingcount ) * 1000 );
+		say "average ping time $apt ms";
 	}
 }
 
-$server->wait( 9000 );
+sleep( 9 );
 
 $RUNNING = 0;
 foreach $thread( threads->list() ) {

@@ -62,7 +62,8 @@ int my_debug( const char *fmt, ... );
 #ifdef _WIN32
 #undef vsnprintf
 #define vsnprintf _vsnprintf
-int snprintf( char *str, int n, char *fmt, ... );
+#undef snprintf
+#define snprintf _snprintf
 #endif
 
 #undef BYTE
@@ -283,7 +284,7 @@ typedef struct st_my_sockaddr {
 	char						a[SOCKADDR_SIZE_MAX];
 } my_sockaddr_t;
 
-#define MYSASIZE(sa)			(sa).l + sizeof( int )
+#define MYSASIZE(sa)			(sa).l + sizeof( socklen_t )
 
 typedef struct st_my_thread_var {
 	struct st_my_thread_var		*prev, *next;

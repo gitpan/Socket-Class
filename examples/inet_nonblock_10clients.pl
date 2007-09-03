@@ -20,7 +20,6 @@ threads->create( \&server_thread, $server );
 our $client_count = 0;
 our $client_ts = &microtime();
 
-@client = ();
 for $i( 1 .. 10 ) {
 	$client = Socket::Class->new(
 		'remote_addr' => '127.0.0.1',
@@ -31,7 +30,6 @@ for $i( 1 .. 10 ) {
 	threads->create( \&client_thread, $client );
 	
 	$client->write( "S" x 512 );
-	$client[$i] = $client;
 }
 
 sleep( 20 );

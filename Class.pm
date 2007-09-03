@@ -13,16 +13,12 @@ use Carp ();
 use vars qw($VERSION);
 
 BEGIN {
-	$VERSION = '1.0.6';
+	$VERSION = '1.0.7';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
 	*sleep = \&wait;
 	*fileno = \&handle;
-}
-
-END {
-	&_cleanup();
 }
 
 sub import {
@@ -147,7 +143,7 @@ L<get_option|Socket::Class/get_option>,
 L<get_rcvbuf_size|Socket::Class/get_rcvbuf_size>,
 L<get_reuseaddr|Socket::Class/get_reuseaddr>,
 L<get_sndbuf_size|Socket::Class/get_sndbuf_size>,
-L<get_timeout|Socket::Class/get_so_timeout>,
+L<get_timeout|Socket::Class/get_timeout>,
 L<get_tcp_nodelay|Socket::Class/get_tcp_nodelay>,
 L<set_blocking|Socket::Class/set_blocking>,
 L<set_broadcast|Socket::Class/set_broadcast>,
@@ -155,7 +151,7 @@ L<set_option|Socket::Class/set_option>,
 L<set_rcvbuf_size|Socket::Class/set_rcvbuf_size>,
 L<set_reuseaddr|Socket::Class/set_reuseaddr>,
 L<set_sndbuf_size|Socket::Class/set_sndbuf_size>,
-L<set_timeout|Socket::Class/set_so_timeout>,
+L<set_timeout|Socket::Class/set_timeout>,
 L<set_tcp_nodelay|Socket::Class/set_tcp_nodelay>
 
 =back
@@ -364,9 +360,8 @@ I<Create a broadcast socket>
 
 =head2 Closing / Destructing / Freeing
 
-In non threaded applications an undef on the reference variable will free the
-socket and its resources. In threaded applications undef wont work
-anymore. In this case you should use I<free()>.
+An undef on the reference variable will free the socket and its resources.
+A call of I<free()> will free the socket resource explicitely.
 
 =over 4
 

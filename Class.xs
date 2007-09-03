@@ -30,16 +30,17 @@ BOOT:
 
 
 #/*****************************************************************************
-# * _cleanup()
+# * END
 # *****************************************************************************/
 
 void
-_cleanup()
+END()
 PREINIT:
 	my_thread_var_t *tv1, *tv2;
 CODE:
 	if( global.destroyed ) return;
 	global.destroyed = 1;
+	_debug( "END called\n" );
 	GLOBAL_LOCK();
 	tv1 = global.first_thread;
 	while( tv1 != NULL ) {
@@ -59,15 +60,16 @@ CODE:
 
 
 #/*****************************************************************************
-# * CLONE( ... )
+# * CLONE_SKIP( ... )
 # *****************************************************************************/
 
-#if defined(USE_ITHREADS) && defined(MY_CXT_CLONE)
+#if defined(USE_ITHREADS)
 
 void
-CLONE( ... )
-CODE:
-	_debug( "clone called at tid 0x%08x\n", get_current_thread_id() );
+CLONE_SKIP( ... )
+PPCODE:
+	_debug( "clone skip called\n" );
+	XSRETURN_NO;
 
 #endif
 
@@ -134,9 +136,12 @@ PPCODE:
 			else {
 				val = SvPVx( ST(i + 1), lval );
 				tv->s_domain = Socket_domainbyname( val );
-				if( tv->s_domain == AF_UNIX ) {
-					tv->s_proto = 0;
-				}
+			}
+			if( tv->s_domain == AF_UNIX ) {
+				tv->s_proto = 0;
+			}
+			else if( tv->s_domain == AF_BLUETOOTH ) {
+				tv->s_proto = BTPROTO_RFCOMM;
 			}
 		}
 		else if( strcmp( key, "type" ) == 0 ) {

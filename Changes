@@ -1,8 +1,12 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.0.7
+    - fixed snprintf on win32
+    - fixed socket by reference destruction when using with threads
+
 version 1.0.6
     - documentation updated
-    - fixed sockt settings on parameters 'local_path' and 'remote_path'
+    - fixed sockt settings for parameters 'local_path' and 'remote_path'
       called by new()
 
 version 1.0.5

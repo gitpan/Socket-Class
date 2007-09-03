@@ -94,7 +94,7 @@ sub response_thread {
 	}
 	say "\nclosing response thread";
 	$sock->free();
-	threads->self->detach() if $RUNNING;
+	$trhd->detach() if $RUNNING;
 	return 1;
 }
 
@@ -138,7 +138,7 @@ sub client_thread {
 	}
 	say "\nclosing client thread";
 	$sock->free();
-	threads->self->detach() if $RUNNING;
+	$trhd->detach() if $RUNNING;
 	return 1;
 }
 

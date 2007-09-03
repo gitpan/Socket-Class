@@ -10,6 +10,8 @@ sub say { print @_, "\n"; }
 
 our $RUNNING : shared = 1;
 
+$o = select STDOUT; $| = 1; select $o;
+
 $server = Socket::Class->new(
 	'domain' => 'inet6',
 	'local_addr' => '::1',
@@ -44,7 +46,7 @@ foreach $thread( threads->list() ) {
 sub server_thread {
 	my( $sock ) = @_;
 	my( $client, $buf );
-	say "\nstarting server thread";
+	say "starting server thread";
 	say "Server running at [" . $sock->local_addr . '] port ' . $sock->local_port;
 	while( $RUNNING ) {
 		if( $client = $sock->accept() ) {
@@ -54,15 +56,15 @@ sub server_thread {
 			$server->wait( 100 );
 		}
 	}
+	say "closing server thread";
 	$sock->free();
-	say "\nclosing server thread";
 }
 
 sub response_thread {
 	my( $sock ) = @_;
 	my( $got, $buf, $trhd );
 	$trhd = threads->self;
-	say "\nstarting response thread";
+	say "starting response thread";
 	say "Incoming connection from [" . $sock->remote_addr . '] port ' . $sock->remote_port;
 	$sock->set_blocking( 0 );
 	while( $RUNNING ) {
@@ -72,23 +74,23 @@ sub response_thread {
 			warn $sock->error;
 			last;
 		}
-		elsif( $got == 0 ) {
-			$trhd->yield;
+		elsif( ! $got ) {
+			$trhd->yield();
 			$sock->wait( 1 );
 			next;
 		}
 		$sock->write( "C" x 512 );
 	}
-	say "\nclosing response thread";
+	say "closing response thread";
 	$sock->free();
-	threads->self->detach() if $RUNNING;
+	$trhd->detach() if $RUNNING;
 	return 1;
 }
 
 sub client_thread {
 	my( $sock ) = @_;
 	my( $got, $buf, $trhd, $tid );
-	say "\nstarting client thread";
+	say "starting client thread";
 	$trhd = threads->self;
 	$tid = $trhd->tid;
 	while( $RUNNING ) {
@@ -98,8 +100,8 @@ sub client_thread {
 			warn $sock->error;
 			last;
 		}
-		elsif( $got == 0 ) {
-			$trhd->yield;
+		elsif( ! $got ) {
+			$trhd->yield();
 			$sock->wait( 1 );
 			next;
 		}
@@ -110,9 +112,9 @@ sub client_thread {
 		}
 		$sock->write( "S" x 512 );
 	}
-	say "\nclosing client thread";
+	say "closing client thread";
 	$sock->free();
-	threads->self->detach() if $RUNNING;
+	$trhd->detach() if $RUNNING;
 	return 1;
 }
 

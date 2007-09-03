@@ -398,8 +398,8 @@ int Socket_getopt( SV *this, int level, int optname, void *optval, socklen_t *op
 int Socket_setblocking( SOCKET s, int value ) {
 #ifdef _WIN32
 	int r;
-	value = ! value;
-	r = ioctlsocket( s, FIONBIO, &value );
+	u_long val = (u_long) ! value;
+	r = ioctlsocket( s, FIONBIO, &val );
 	_debug( "ioctlsocket socket %u %d %d\n", s, r, Socket_errno() );
 #else
 	DWORD flags;
@@ -497,17 +497,6 @@ DWORD get_current_thread_id() {
 	return 0;
 #endif
 }
-
-#ifdef _WIN32
-int snprintf( char *str, int n, char *fmt, ... ) {
-	int r;
-	va_list a;
-	va_start( a, fmt );
-	r = vsnprintf( str, n, fmt, a );
-	va_end( a );
-	return r;
-}
-#endif
 
 int is_numeric( const char *str ) {
 	for( ; *str != '\0'; str ++ ) {
