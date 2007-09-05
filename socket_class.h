@@ -54,9 +54,15 @@
 //#define SC_DEBUG 1
 #ifdef SC_DEBUG
 int my_debug( const char *fmt, ... );
+#if SC_DEBUG > 1
+#define _tdebug my_debug
+#else
+#define _tdebug
+#endif
 #define _debug my_debug
 #else
 #define _debug
+#define _tdebug
 #endif
 
 #ifdef _WIN32
@@ -71,14 +77,14 @@ int my_debug( const char *fmt, ... );
 #undef WORD
 #define WORD unsigned short
 #undef DWORD
-#define DWORD unsigned long
+#define DWORD unsigned int
 
 #undef XLONG
 #undef UXLONG
 #if defined __unix__
 #	define XLONG long long
 #	define UXLONG unsigned long long
-#elif defined WIN32
+#elif defined _WIN32
 #	define XLONG __int64
 #	define UXLONG unsigned __int64
 #else
@@ -322,20 +328,20 @@ extern my_global_t global;
 
 #ifdef SC_THREADS
 #define GLOBAL_LOCK() \
-	_debug( "global lock at %s line %d\n", __FILE__, __LINE__ ); \
+	_tdebug( "global lock called at %s line %d\n", __FILE__, __LINE__ ); \
 	MUTEX_LOCK( &global.thread_lock )
 #define GLOBAL_UNLOCK() \
-	_debug( "global unlock at %s line %d\n", __FILE__, __LINE__ ); \
+	_tdebug( "global unlock called at %s line %d\n", __FILE__, __LINE__ ); \
 	MUTEX_UNLOCK( &global.thread_lock )
 #define TV_LOCK(tv) \
-	_debug( "tv lock %u at %s line %d\n", tv, __FILE__, __LINE__ ); \
+	_tdebug( "tv lock 0x%08X called at %s line %d\n", tv, __FILE__, __LINE__ ); \
 	MUTEX_LOCK( &tv->thread_lock )
 #define TV_UNLOCK(tv) \
-	_debug( "tv unlock %u at %s line %d\n", tv, __FILE__, __LINE__ ); \
+	_tdebug( "tv unlock 0x%08X called at %s line %d\n", tv, __FILE__, __LINE__ ); \
 	MUTEX_UNLOCK( &tv->thread_lock )
 #define TV_UNLOCK_SAFE(tv) \
 	if( tv != NULL ) { \
-		_debug( "tv unlock %u at %s line %d\n", tv, __FILE__, __LINE__ ); \
+		_tdebug( "tv unlock 0x%08X called at %s line %d\n", tv, __FILE__, __LINE__ ); \
 		MUTEX_UNLOCK( &tv->thread_lock ); \
 	}
 #else // no threads
@@ -370,7 +376,6 @@ char *my_strncpy( char *dst, const char *src, size_t len );
 char *my_strcpy( char *dst, const char *src );
 char *my_strncpyu( char *dst, const char *src, size_t len );
 int my_stricmp( const char *cs, const char *ct );
-int is_numeric( const char *str );
 
 #ifdef _WIN32 // win32
 #define Socket_close(s) \
@@ -387,11 +392,15 @@ int is_numeric( const char *str );
 #endif // posix
 
 void Socket_setaddr_UNIX( my_sockaddr_t *addr, const char *path );
-int Socket_setaddr_INET( my_thread_var_t *tv, const char *host, const char *port, int use );
-int Socket_setaddr_BTH( my_thread_var_t *tv, const char *host, const char *port, int use );
+int Socket_setaddr_INET(
+	my_thread_var_t *tv, const char *host, const char *port, int use );
+int Socket_setaddr_BTH(
+	my_thread_var_t *tv, const char *host, const char *port, int use );
 int Socket_setblocking( SOCKET s, int value );
-int Socket_setopt( SV *this, int level, int optname, const void *optval, socklen_t optlen );
-int Socket_getopt( SV *this, int level, int optname, void *optval, socklen_t *optlen );
+int Socket_setopt(
+	SV *this, int level, int optname, const void *optval, socklen_t optlen );
+int Socket_getopt(
+	SV *this, int level, int optname, void *optval, socklen_t *optlen );
 int Socket_domainbyname( const char *name );
 int Socket_typebyname( const char *name );
 int Socket_protobyname( const char *name );

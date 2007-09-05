@@ -33,7 +33,7 @@ threads->create( \&client_thread, $client );
 our $client_count = 0;
 our $client_ts : shared = &microtime();
 
-sleep( 9 );
+sleep( 2 );
 
 $RUNNING = 0;
 foreach $thread( threads->list() ) {
@@ -121,7 +121,7 @@ sub client_thread {
 			last;
 		}
 		$client_count ++;
-		if( ( $client_count % 100 ) == 0 ) {
+		if( ( $client_count % 1000 ) == 0 ) {
 			my $ac = sprintf( '%0.1f', $client_count / ( &microtime() - $client_ts ) );
 			print "$tid got $client_count packets a $got bytes $ac p/s\n";
 		}

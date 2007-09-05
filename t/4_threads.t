@@ -7,7 +7,7 @@ BEGIN {
 	print "1..$_tests\n";
 
 	require Config;
-	if( ! $Config::Config{'usethreads'} ) {
+	if( ! $Config::Config{'useithreads'} ) {
 		print STDERR "Skip: not supported on this platform\n";
 		for( $_pos = 1; $_pos <= $_tests; $_pos ++ ) {
 			print "ok $_pos\n";

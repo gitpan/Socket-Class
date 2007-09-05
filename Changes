@@ -1,5 +1,15 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.1.0
+    - added function "get_hostaddr"
+    - function "readline" now returns new line characters also
+    - !!! removed socket by reference destruction when using threads,
+      !!! it wont work right in some cases. it is safer to free the socket
+      !!! explictly.
+    - added detection of "new standard network functions" on win32
+    - improved return parameters in xs functions
+    - added support for perl5.6.2
+
 version 1.0.7
     - fixed snprintf on win32
     - fixed socket by reference destruction when using with threads

@@ -13,7 +13,7 @@ use Carp ();
 use vars qw($VERSION);
 
 BEGIN {
-	$VERSION = '1.0.7';
+	$VERSION = '1.1.0';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -119,6 +119,7 @@ B<Address Functions>
 
 =item
 
+L<get_hostaddr|Socket::Class/get_hostaddr>,
 L<get_hostname|Socket::Class/get_hostname>,
 L<local_addr|Socket::Class/local_addr>,
 L<local_path|Socket::Class/local_path>,
@@ -360,8 +361,12 @@ I<Create a broadcast socket>
 
 =head2 Closing / Destructing / Freeing
 
-An undef on the reference variable will free the socket and its resources.
-A call of I<free()> will free the socket resource explicitely.
+In non threaded applications an undef on the reference variable will free
+the socket and its resources.
+
+In threaded applications, socket destruction by undefining the reference
+variable, wont work right anymore and has been disabled. In this case you
+need to call I<free()>.
 
 =over 4
 
@@ -1348,6 +1353,30 @@ B<Examples>
   
   $paddr = $sock->pack_addr( '127.0.0.1', 9999 );
   $str = $sock->get_hostname( $paddr );
+
+
+=item get_hostaddr ( $name )
+
+Resolves the address of a given host name.
+
+B<Parameters>
+
+I<$name>
+
+The host name as a string.
+
+B<Return Values>
+
+Returns the address of the host, or UNDEF on error.
+The error code can be retrieved with L<errno()|Socket::Class/errno>
+and the error string can be retrieved with L<error()|Socket::Class/error>. 
+
+B<Examples>
+
+  $host = 'www.perl.org';
+  $addr = $sock->get_hostaddr( $host );
+  print "address of $host is $addr\n";
+
 
 =back
 

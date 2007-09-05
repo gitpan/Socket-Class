@@ -3,7 +3,7 @@
 my_global_t global;
 
 void my_thread_var_add( my_thread_var_t *tv ) {
-	_debug( "add tv %lu\n", tv );
+	_debug( "add tv 0x%08x\n", tv );
 	tv->tid = get_current_thread_id();
 #ifdef SC_THREADS
 	MUTEX_INIT( &tv->thread_lock );
@@ -21,7 +21,7 @@ void my_thread_var_add( my_thread_var_t *tv ) {
 
 void my_thread_var_free( my_thread_var_t *tv ) {
 	TV_LOCK( tv );
-	_debug( "closing socket %d tv %u\n", tv->sock, tv );
+	_debug( "closing socket %d tv 0x%08x\n", tv->sock, tv );
 	Socket_close( tv->sock );
 	if( tv->s_domain == AF_UNIX ) {
 		remove( ((struct sockaddr_un *) tv->l_addr.a)->sun_path );
@@ -37,7 +37,7 @@ void my_thread_var_free( my_thread_var_t *tv ) {
 
 void my_thread_var_rem( my_thread_var_t *tv ) {
 	GLOBAL_LOCK();
-	_debug( "removing thread_var %lu tid 0x%08x\n", tv, get_current_thread_id() );
+	_debug( "removing thread_var 0x%08x tid 0x%08x\n", tv, get_current_thread_id() );
 	if( tv == global.last_thread )
 		global.last_thread = tv->prev;
 	if( tv == global.first_thread )
@@ -70,7 +70,7 @@ my_thread_var_t *my_thread_var_find( SV *sv ) {
 		tvl = tvl->prev;
 		tvf = tvf->next;
 	}
-	_debug( "tv %u not found\n", tv );
+	_debug( "tv 0x%08x NOT found\n", tv );
 retf:
 	GLOBAL_UNLOCK();
 	return tvf;
@@ -163,7 +163,7 @@ int Socket_setaddr_INET( tv, host, port, use )
 		_debug( "getaddrinfo() failed %d\n", r );
 		return r;
 	}
-	addr->l = (int) ail->ai_addrlen;
+	addr->l = (socklen_t) ail->ai_addrlen;
 	memcpy( addr->a, ail->ai_addr, ail->ai_addrlen );
 	freeaddrinfo( ail );
 #else
@@ -363,7 +363,9 @@ int Socket_protobyname( const char *name ) {
 	}
 }
 
-int Socket_setopt( SV *this, int level, int optname, const void *optval, socklen_t optlen ) {
+int Socket_setopt(
+	SV *this, int level, int optname, const void *optval, socklen_t optlen
+) {
 	my_thread_var_t *tv;
 	int r;
 	tv = my_thread_var_find( this );
@@ -379,7 +381,9 @@ int Socket_setopt( SV *this, int level, int optname, const void *optval, socklen
 	}
 }
 
-int Socket_getopt( SV *this, int level, int optname, void *optval, socklen_t *optlen ) {
+int Socket_getopt(
+	SV *this, int level, int optname, void *optval, socklen_t *optlen
+) {
 	my_thread_var_t *tv;
 	int r;
 	tv = my_thread_var_find( this );
@@ -474,12 +478,12 @@ int my_ba2str( const bdaddr_t *ba, char *str ) {
 
 int my_str2ba( const char *str, bdaddr_t *ba ) {
 	register unsigned char *b = (unsigned char *) ba;
-	const char *ptr = ( str != NULL ? str : "00:00:00:00:00:00" );
+	const char *ptr = (str != NULL ? str : "00:00:00:00:00:00");
 	int i;
 	for( i = 0; i < 6; i ++ ) {
 		//_debug( "converting %d %s\n", i, ptr );
 		b[5 - i] = (uint8_t) strtol( ptr, NULL, 16 );
-		if( i != 5 && ! ( ptr = strchr( ptr, ':' ) ) )
+		if( i != 5 && ! (ptr = strchr( ptr, ':' )) )
 			ptr = ":00:00:00:00:00";
 		ptr ++;
 	}
@@ -496,14 +500,6 @@ DWORD get_current_thread_id() {
 #else
 	return 0;
 #endif
-}
-
-int is_numeric( const char *str ) {
-	for( ; *str != '\0'; str ++ ) {
-		if( *str < '0' || *str > '9' )
-			return 0;
-	}
-	return 1;
 }
 
 char *my_strrev( char *str, size_t len ) {
@@ -617,8 +613,8 @@ int my_debug( const char *fmt, ... ) {
 	size_t l;
 	char *tmp, *s1;
 	l = strlen( fmt );
-	tmp = malloc( 10 + l );
-	s1 = my_strcpy( tmp, "<DEBUG> " );
+	tmp = malloc( 512 + l );
+	s1 = my_strcpy( tmp, "<SC_DEBUG> " );
 	s1 = my_strcpy( s1, fmt );
 	va_start( a, fmt );
 	r = vprintf( tmp, a );

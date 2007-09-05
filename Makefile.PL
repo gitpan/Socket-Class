@@ -1,8 +1,10 @@
-use 5.008;
+use 5.006;
 use ExtUtils::MakeMaker;
 use Config;
 
-my %os_supported = ( 'linux' => 1, 'MSWin32' => 1, 'darwin' => 1, 'cygwin' => 1 );
+my %os_supported = (
+	'linux' => 1, 'MSWin32' => 1, 'darwin' => 1, 'cygwin' => 1
+);
 
 if( ! $os_supported{$^O} ) {
 print <<EOF1;
@@ -42,10 +44,21 @@ elsif( $^O eq 'cygwin' ) {
 	push @{$_MAKEOPTS{'LIBS'}}, '-L/lib/w32api -lole32 -lversion -lws2_32';
 }
 
-if( $^O ne 'MSWin32' ) {
+if( $^O eq 'MSWin32' ) {
+	@_IP = split( ';', $ENV{'INCLUDE'} );
+	$r = find_header_item( \@_IP, 'winsock2.h', 'getaddrinfo' );
+	$r += find_header_item( \@_IP, 'winsock2.h', 'freeaddrinfo' );
+	$r += find_header_item( \@_IP, 'winsock2.h', 'getnameinfo' );
+	if( $r < 3 ) {
+		$_MAKEOPTS{'DEFINE'} .= ' -DSC_OLDNET';
+	}
+}
+else {
 	@_IP = qw(/usr/local/include /usr/include);
-	$r = find_header_item( \@_IP, 'netdb.h', 'freeaddrinfo' );
-	if( ! $r ) {
+	$r = find_header_item( \@_IP, 'netdb.h', 'getaddrinfo' );
+	$r += find_header_item( \@_IP, 'netdb.h', 'freeaddrinfo' );
+	$r += find_header_item( \@_IP, 'netdb.h', 'getnameinfo' );
+	if( $r < 3 ) {
 		$_MAKEOPTS{'DEFINE'} .= ' -DSC_OLDNET';
 	}
 }
@@ -61,7 +74,6 @@ if( $^O eq 'linux' && 0 ) {
 elsif( $^O eq 'MSWin32' && 0 ) {
 	unshift @{$_MAKEOPTS{'C'}}, 'sc_ws2bth.c';
 	unshift @{$_MAKEOPTS{'H'}}, 'sc_ws2bth.h';
-	#push @{$_MAKEOPTS{'LIBS'}}, '-lbluetooth';
 	$_MAKEOPTS{'DEFINE'} .= ' -DSC_USE_WS2BTH -DSC_HAS_BLUETOOTH';
 	$_MAKEOPTS{'XS'}->{'Bluetooth.xs'} = 'Bluetooth.c';
 	push @{$_MAKEOPTS{'C'}}, 'Bluetooth.c';
@@ -97,6 +109,6 @@ sub find_header_item {
 			}
 		}
 	}
-	$level or print "not found\n";
+	$level or print "NOT found\n";
 	return 0;
 }
