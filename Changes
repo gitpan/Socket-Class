@@ -1,5 +1,10 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.1.1
+    - added cascading to internal resource storage for better performance on
+      higher number of used sockets
+    - fixed inet6 on older versions of win32
+
 version 1.1.0
     - added function "get_hostaddr"
     - function "readline" now returns new line characters also

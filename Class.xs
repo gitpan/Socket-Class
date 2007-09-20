@@ -14,7 +14,8 @@ BOOT:
 	if( iResult != NO_ERROR )
 		Perl_croak( aTHX_ "Error at WSAStartup()" );
 #endif
-	global.first_thread = global.last_thread = NULL;
+	memset( global.first_thread, 0, sizeof( global.first_thread ) );
+	memset( global.last_thread, 0, sizeof( global.last_thread ) );
 	global.destroyed = 0;
 #ifdef SC_THREADS
 	MUTEX_INIT( &global.thread_lock );
@@ -37,20 +38,23 @@ void
 END()
 PREINIT:
 	my_thread_var_t *tv1, *tv2;
+	u_long cascade;
 CODE:
 	if( global.destroyed )
 		return;
 	global.destroyed = 1;
 	_debug( "END called\n" );
 	GLOBAL_LOCK();
-	tv1 = global.first_thread;
-	while( tv1 != NULL ) {
-		tv2 = tv1->next;
-		_debug( "freeing tv 0x%08x\n", tv1 );
-		my_thread_var_free( tv1 );
-		tv1 = tv2;
+	for( cascade = 0; cascade < SC_TV_CASCADE; cascade ++ ) {
+		tv1 = global.first_thread[cascade];
+		while( tv1 != NULL ) {
+			tv2 = tv1->next;
+			_debug( "freeing tv 0x%08x\n", tv1 );
+			my_thread_var_free( tv1 );
+			tv1 = tv2;
+		}
+		global.first_thread[cascade] = global.last_thread[cascade] = NULL;
 	}
-	global.first_thread = global.last_thread = NULL;
 	GLOBAL_UNLOCK();
 #ifdef SC_THREADS
 	MUTEX_DESTROY( &global.thread_lock );
@@ -97,7 +101,7 @@ CODE:
 
 
 #/*****************************************************************************
-# * new( class, ... )
+# * new( class )
 # *****************************************************************************/
 
 void
@@ -1273,6 +1277,7 @@ _inet4e:
 		saddr.l = sizeof( struct sockaddr_in6 );
 		memset( saddr.a, 0, saddr.l );
 		((struct sockaddr_in6 *) saddr.a)->sin6_family = AF_INET6;
+#ifndef _WIN32
 		if( ( s1[0] >= '0' && s1[0] <= '9' ) || s1[0] == ':' ) {
 			if( inet_pton(
 					AF_INET6, s1, &((struct sockaddr_in6 *) saddr.a)->sin6_addr
@@ -1317,6 +1322,7 @@ _inet4e:
 				((struct sockaddr_in6 *) saddr.a)->sin6_port = se->s_port;
 			}
 		}
+#endif
 		ST(0) = sv_2mortal( newSVpvn( (char *) &saddr, MYSASIZE(saddr) ) );
 _inet6e:
 		GLOBAL_UNLOCK();
@@ -1470,6 +1476,7 @@ PPCODE:
 			ST(0) = sv_2mortal( newSVpvn( he->h_name, strlen( he->h_name ) ) );
 		}
 		else if( tv->s_domain == AF_INET6 ) {
+#ifndef _WIN32
 			if( inet_pton( AF_INET6, s1, &ia6 ) <= 0 ) {
 				TV_ERROR( tv, "invalid address" );
 				goto unlock;
@@ -1482,6 +1489,10 @@ PPCODE:
 			}
 			TV_ERRNO( tv, 0 );
 			ST(0) = sv_2mortal( newSVpvn( he->h_name, strlen( he->h_name ) ) );
+#else
+			TV_ERROR( tv, -1, "not supported on this platform" );
+			ST(0) = &PL_sv_undef;
+#endif
 		}
 	}
 	else {
@@ -2152,35 +2163,31 @@ PPCODE:
 	if( (tv = my_thread_var_find( this )) == NULL )
 		XSRETURN_EMPTY;
 	TV_LOCK( tv );
-	if( read != NULL && SvOK( read ) ) {
-		dr = SvTRUE( read );
-		if( dr ) {
-			FD_ZERO( &fdr );
-			FD_SET( tv->sock, &fdr );
-		}
+	if( read == NULL )
+		dr = 0;
+	else if( (dr = SvTRUE( read )) ) {
+		FD_ZERO( &fdr );
+		FD_SET( tv->sock, &fdr );
 	}
-	if( write != NULL && SvOK( write ) ) {
-		dw = SvTRUE( write );
-		if( dw ) {
-			FD_ZERO( &fdw );
-			FD_SET( tv->sock, &fdw );
-		}
+	if( write == NULL )
+		dw = 0;
+	else if( (dw = SvTRUE( write )) ) {
+		FD_ZERO( &fdw );
+		FD_SET( tv->sock, &fdw );
 	}
-	if( except != NULL && SvOK( except ) ) {
-		de = SvTRUE( except );
-		if( de ) {
-			FD_ZERO( &fde );
-			FD_SET( tv->sock, &fde );
-		}
+	if( except == NULL )
+		de = 0;
+	else if( (de = SvTRUE( except )) ) {
+		FD_ZERO( &fde );
+		FD_SET( tv->sock, &fde );
 	}
-	if( timeout != NULL ) {
+	if( timeout == NULL )
+		pt = NULL;
+	else {
 		ms = SvNV( timeout );
 		t.tv_sec = (long) (ms / 1000);
 		t.tv_usec = (long) (ms * 1000) % 1000000;
 		pt = &t;
-	}
-	else {
-		pt = NULL;
 	}
 	ret = select(
 		(int) (tv->sock + 1), (dr ? &fdr : NULL), (dw ? &fdw : NULL),

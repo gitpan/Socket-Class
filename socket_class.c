@@ -3,19 +3,20 @@
 my_global_t global;
 
 void my_thread_var_add( my_thread_var_t *tv ) {
-	_debug( "add tv 0x%08x\n", tv );
+	u_long cascade = (u_long) tv % SC_TV_CASCADE;
+	_debug( "add tv 0x%08x cascade %u\n", tv, cascade );
 	tv->tid = get_current_thread_id();
 #ifdef SC_THREADS
 	MUTEX_INIT( &tv->thread_lock );
 #endif
 	GLOBAL_LOCK();
-	if( global.first_thread == NULL )
-		global.first_thread = tv;
+	if( global.first_thread[cascade] == NULL )
+		global.first_thread[cascade] = tv;
 	else {
-		global.last_thread->next = tv;
-		tv->prev = global.last_thread;
+		global.last_thread[cascade]->next = tv;
+		tv->prev = global.last_thread[cascade];
 	}
-	global.last_thread = tv;
+	global.last_thread[cascade] = tv;
 	GLOBAL_UNLOCK();
 }
 
@@ -36,12 +37,13 @@ void my_thread_var_free( my_thread_var_t *tv ) {
 }
 
 void my_thread_var_rem( my_thread_var_t *tv ) {
+	u_long cascade = (u_long) tv % SC_TV_CASCADE;
 	GLOBAL_LOCK();
 	_debug( "removing thread_var 0x%08x tid 0x%08x\n", tv, get_current_thread_id() );
-	if( tv == global.last_thread )
-		global.last_thread = tv->prev;
-	if( tv == global.first_thread )
-		global.first_thread = tv->next;
+	if( tv == global.last_thread[cascade] )
+		global.last_thread[cascade] = tv->prev;
+	if( tv == global.first_thread[cascade] )
+		global.first_thread[cascade] = tv->next;
 	if( tv->prev )
 		tv->prev->next = tv->next;
 	if( tv->next )
@@ -51,15 +53,17 @@ void my_thread_var_rem( my_thread_var_t *tv ) {
 }
 
 my_thread_var_t *my_thread_var_find( SV *sv ) {
+	u_long cascade;
 	register my_thread_var_t *tvf, *tvl, *tv;
 	if( global.destroyed )
 		return NULL;
 	if( ! SvROK( sv ) || ! ( sv = SvRV( sv ) ) || ! SvIOK( sv ) ) return NULL;
 	tv = INT2PTR( my_thread_var_t *, SvIV( sv ) );
+	cascade = (u_long) tv % SC_TV_CASCADE;
 	GLOBAL_LOCK();
 	//_debug( "looking for tv %u\n", tv );
-	tvf = global.first_thread;
-	tvl = global.last_thread;
+	tvf = global.first_thread[cascade];
+	tvl = global.last_thread[cascade];
 	while( 1 ) {
 		if( tvl == NULL )
 			break;
@@ -208,6 +212,7 @@ int Socket_setaddr_INET( tv, host, port, use )
 		addr->l = sizeof(struct sockaddr_in6);
 		in6 = (struct sockaddr_in6 *) addr->a;
 		in6->sin6_family = AF_INET6;
+#ifndef _WIN32
 		if( host != NULL ) {
 			if( ( host[0] >= '0' && host[0] <= '9' ) || host[0] == ':' ) {
 				if( inet_pton( AF_INET6, host, &in6->sin6_addr ) != 0 ) {
@@ -236,6 +241,7 @@ int Socket_setaddr_INET( tv, host, port, use )
 			}
 		}
 	}
+#endif
 	goto exit;
 error:
 	GLOBAL_UNLOCK();
@@ -502,24 +508,17 @@ DWORD get_current_thread_id() {
 #endif
 }
 
-char *my_strrev( char *str, size_t len ) {
-	register char *p1, *p2;
-	if( ! str || ! *str ) return str;
-	for( p1 = str, p2 = str + len - 1; p2 > p1; ++ p1, -- p2 ) {
-		*p1 ^= *p2;
-		*p2 ^= *p1;
-		*p1 ^= *p2;
-	}
-	return str;
-}
-
 char *my_itoa( char *str, long value, int radix ) {
-	register int rem;
-	register char *ret = str;
+	int rem;
+    char tmp[21], *ret = tmp, neg = 0;
+	if( value < 0 ) {
+		value = -value;
+		neg = 1;
+	}
 	switch( radix ) {
 	case 16:
 		do {
-			rem = value % 16;
+			rem = (int) ( value % 16 );
 			value /= 16;
 			switch( rem ) {
 			case 10:
@@ -541,21 +540,22 @@ char *my_itoa( char *str, long value, int radix ) {
 				*ret ++ = 'F';
 				break;
 			default:
-				*ret ++ = (char) ( rem + 0x30 );
+				*ret ++ = (char) ( rem + '0' );
 				break;
 			}
-		} while( value != 0 );
+		} while( value > 0 );
 		break;
 	default:
 		do {
-			rem = value % radix;
+			*ret ++ = (char) ( ( value % radix ) + '0' );
 			value /= radix;
-			*ret ++ = (char) ( rem + 0x30 );
-		} while( value != 0 );
+		} while( value > 0 );
+		if( neg )
+			*ret ++ = '-';
 	}
-	*ret = '\0' ;
-	my_strrev( str, ret - str );
-	return ret;
+	for( ret --; ret >= tmp; *str ++ = *ret, ret -- );
+	*str = '\0';
+	return str;
 }
 
 char *my_strncpy( char *dst, const char *src, size_t len ) {
@@ -617,7 +617,7 @@ int my_debug( const char *fmt, ... ) {
 	s1 = my_strcpy( tmp, "<SC_DEBUG> " );
 	s1 = my_strcpy( s1, fmt );
 	va_start( a, fmt );
-	r = vprintf( tmp, a );
+	r = vfprintf( stderr, tmp, a );
 	va_end( a );
 	free( tmp );
 	return r;

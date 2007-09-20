@@ -13,7 +13,7 @@ use Carp ();
 use vars qw($VERSION);
 
 BEGIN {
-	$VERSION = '1.1.0';
+	$VERSION = '1.1.1';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -168,6 +168,7 @@ L<handle|Socket::Class/handle>,
 L<is_readable|Socket::Class/is_readable>,
 L<is_writable|Socket::Class/is_writable>,
 L<select|Socket::Class/select>,
+L<sleep|Socket::Class/sleep>
 L<state|Socket::Class/state>,
 L<to_string|Socket::Class/to_string>,
 L<wait|Socket::Class/wait>
@@ -190,12 +191,12 @@ L<is_error|Socket::Class/is_error>
 
 =head2 Simple Internet Server
 
-  use Socket::Class qw($SO_MAXCONN);
+  use Socket::Class qw($SOMAXCONN);
   
   # create a new socket at port 9999 and listen for clients 
   $server = Socket::Class->new(
        'local_port' => 9999,
-       'listen' => $SO_MAXCONN,
+       'listen' => $SOMAXCONN,
   ) or die Socket::Class->error;
   
   # wait for clients

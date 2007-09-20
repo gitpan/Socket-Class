@@ -96,6 +96,8 @@ int my_debug( const char *fmt, ... );
 typedef unsigned short			uint16_t;
 typedef unsigned char			uint8_t;
 typedef unsigned short			sa_family_t;
+#else
+typedef unsigned long			u_long;
 #endif
 
 // removing from perlio
@@ -313,9 +315,11 @@ typedef struct st_my_thread_var {
 #endif
 } my_thread_var_t;
 
+#define SC_TV_CASCADE			9
+
 typedef struct st_my_global {
-	my_thread_var_t				*first_thread;
-	my_thread_var_t				*last_thread;
+	my_thread_var_t				*first_thread[SC_TV_CASCADE];
+	my_thread_var_t				*last_thread[SC_TV_CASCADE];
 	long						last_errno;
 	char						last_error[256];
 	int							destroyed;
