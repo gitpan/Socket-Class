@@ -1,5 +1,11 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.12
+    - version style changed
+    - "new()" now sets correct error code on failure
+    - added "listen" to documentation.. sorry :)
+    - fixed test scripts for darwin
+
 version 1.1.1
     - added cascading to internal resource storage for better performance on
       higher number of used sockets

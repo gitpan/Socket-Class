@@ -13,7 +13,7 @@ use Carp ();
 use vars qw($VERSION);
 
 BEGIN {
-	$VERSION = '1.1.1';
+	$VERSION = '1.12';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -418,7 +418,7 @@ Closes the socket and frees all internally allocated resources.
 
 =back
 
-=head2 Bind and Accept
+=head2 Bind, Listen and Accept
 
 =over 4
 
@@ -457,6 +457,34 @@ B<Examples>
 
   $sock->bind( '0.0.0.0', 9999 )
       or die "can't bind: " . $sock->error;
+
+
+=item listen ( [$backlog] )
+
+Listens for a connection on a socket.
+
+B<Parameters>
+
+I<$backlog>
+
+A maximum of backlog incoming connections will be queued for processing.
+If a connection request arrives with the queue full the client may
+receive an error with an indication of ECONNREFUSED, or, if the
+underlying protocol supports retransmission, the request may be ignored
+so that retries may succeed.
+
+B<Return Values>
+
+Returns TRUE on succes or FALSE on failure.
+The error code can be retrieved with L<errno()|Socket::Class/errno>
+and the error string can be retrieved with L<error()|Socket::Class/error>. 
+
+B<Examples>
+
+  use Socket::Class qw($SOMAXCONN);
+  ...
+  $sock->listen( $SOMAXCONN )
+      or die $sock->error;
 
 
 =item accept ()

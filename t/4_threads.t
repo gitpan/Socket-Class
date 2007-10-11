@@ -26,24 +26,33 @@ our $RUNNING : shared = 1;
 our $_pos : shared = 1;
 
 $server = Socket::Class->new(
-	'local_addr' => '127.0.0.1',
-	'local_port' => 0,
-	'listen' => 10,
 	'blocking' => 0,
 ) or warn Socket::Class->error;
-_check( $server );
+
+our $port = 11340;
+while( ! $server->bind( 'localhost', $port ) ) {
+	$port ++;
+	if( $port > 65535 ) {
+		$server = undef;
+		last;
+	}
+}
+if( $server ) {
+	$server->listen( 10 ) or $server = undef;
+}
 
 if( ! $server ) {
 	_fail_all();
 	goto _end;
 }
+_check( 1 );
 
 threads->create( \&server_thread, $server );
 
 for $i( 1 .. 3 ) {
 	$client = Socket::Class->new(
-		'remote_addr' => $server->local_addr,
-		'remote_port' => $server->local_port,
+		'remote_addr' => 'localhost',
+		'remote_port' => $port,
 		'blocking' => 0,
 	) or warn Socket::Class->error;
 	_check( $client );

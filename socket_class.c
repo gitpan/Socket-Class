@@ -597,12 +597,10 @@ char *my_strncpyu( char *dst, const char *src, size_t len ) {
 }
 
 int my_stricmp( const char *cs, const char *ct ) {
-	register signed char res;
-	while( 1 ) {
-		if( ( res = toupper( *cs ) - toupper( *ct ++ ) ) != 0 || ! *cs ++ )
-			break;
-	}
-	return res;
+	for( ; *cs != '\0'; cs ++, ct ++ )
+		if( toupper( *cs ) - toupper( *ct ) != 0 )
+			return 1;
+	return 0;
 }
 
 #ifdef SC_DEBUG

@@ -298,19 +298,19 @@ PPCODE:
 					}
 					if( i ) {
 						_debug( "getsockopt SO_ERROR %d\n", i );
-						tv->last_errno = i;
+						global.last_errno = i;
 						goto error2;
 					}
 				}
 				else {
 					_debug( "connect timed out %u\n", ETIMEDOUT );
-					tv->last_errno = ETIMEDOUT;
+					global.last_errno = ETIMEDOUT;
 					goto error2;
 				}	
 			}
 			else {
 				_debug( "connect failed %d\n", i );
-				tv->last_errno = i;
+				global.last_errno = i;
 				goto error2;
 			}
 		}
@@ -654,7 +654,7 @@ error:
 # *****************************************************************************/
 
 void
-listen( this, queue = -1 )
+listen( this, queue = SOMAXCONN )
 	SV *this;
 	int queue;
 PREINIT:
