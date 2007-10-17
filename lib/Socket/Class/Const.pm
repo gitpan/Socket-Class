@@ -7,7 +7,7 @@ package Socket::Class::Const;
 use vars qw($VERSION $WIN);
 
 BEGIN {
-	$VERSION = '1.0.0';
+	$VERSION = '1.0';
 	$WIN = $^O eq 'MSWin32';
 }
 

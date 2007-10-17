@@ -258,15 +258,16 @@ typedef struct st_bdaddr {
 #ifdef _WIN32
 
 #include <pshpack1.h>
-typedef struct st_sockaddr_bt {
+struct st_sockaddr_bt {
     sa_family_t		bt_family;
     bdaddr_t		bt_bdaddr;		// Bluetooth device address
     GUID			bt_classid; 	// [OPTIONAL] system will query SDP for port
     ULONG			bt_port;		// RFCOMM channel or L2CAP PSM
 } sockaddr_bt_t;
-typedef sockaddr_bt_t			SOCKADDR_RFCOMM;
-typedef sockaddr_bt_t			SOCKADDR_L2CAP;
 #include <poppack.h>
+
+typedef struct st_sockaddr_bt			SOCKADDR_RFCOMM;
+typedef struct st_sockaddr_bt			SOCKADDR_L2CAP;
 
 #else // posix
 
@@ -382,17 +383,23 @@ char *my_strncpyu( char *dst, const char *src, size_t len );
 int my_stricmp( const char *cs, const char *ct );
 
 #ifdef _WIN32 // win32
+
 #define Socket_close(s) \
 	if( (s) != INVALID_SOCKET ) { \
 		closesocket( (s) ); (s) = (SOCKET) INVALID_SOCKET; \
 	}
 #define Socket_errno()            WSAGetLastError()
+
+int inet_aton( const char *cp, struct in_addr *inp );
+
 #else // posix
+
 #define Socket_close(s) \
 	if( (s) != INVALID_SOCKET ) { \
 		close( (s) ); (s) = (SOCKET) INVALID_SOCKET; \
 	}
 #define Socket_errno()            errno
+
 #endif // posix
 
 void Socket_setaddr_UNIX( my_sockaddr_t *addr, const char *path );

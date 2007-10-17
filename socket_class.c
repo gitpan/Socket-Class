@@ -111,6 +111,11 @@ void Socket_error( char *str, DWORD len, long num ) {
 		s1[ret - 1] = '\0';
 }
 
+int inet_aton( const char *cp, struct in_addr *inp ) {
+	inp->s_addr = inet_addr( cp );
+	return inp->s_addr == INADDR_NONE ? 0 : 1;
+}
+
 #else
 
 void Socket_error( char *str, DWORD len, long num ) {
@@ -172,15 +177,13 @@ int Socket_setaddr_INET( tv, host, port, use )
 	freeaddrinfo( ail );
 #else
 	my_sockaddr_t *addr;
-	struct hostent *he;
 	if( tv->s_domain == AF_BLUETOOTH )
 		return Socket_setaddr_BTH( tv, host, port, use );
 	GLOBAL_LOCK();
 	addr = (use == ADDRUSE_LISTEN) ? &tv->l_addr : &tv->r_addr;
 	if( tv->s_domain == AF_INET ) {
-		struct sockaddr_in *in;
+		struct sockaddr_in *in = (struct sockaddr_in *) addr->a;
 		addr->l = sizeof(struct sockaddr_in);
-		in = (struct sockaddr_in *) addr->a;
 		in->sin_family = AF_INET;
 		if( host == NULL && use != ADDRUSE_LISTEN )
 			host = "127.0.0.0";
@@ -188,20 +191,18 @@ int Socket_setaddr_INET( tv, host, port, use )
 			if( host[0] >= '0' && host[0] <= '9' )
 				in->sin_addr.s_addr = inet_addr( host );
 			else {
-				he = gethostbyname( host );
-				if( he == NULL ) {
+				struct hostent *he;
+				if( (he = gethostbyname( host )) == NULL )
 					goto error;
-				}
-				in->sin_addr.s_addr = inet_addr( he->h_addr );
+				in->sin_addr = *(struct in_addr*) he->h_addr;
 			}
 		}
 		if( port != NULL ) {
 			if( port[0] >= '0' && port[0] <= '9' )
-				in->sin_port = htons( atol( port ) );
+				in->sin_port = htons( atoi( port ) );
 			else {
 				struct servent *se;
-				se = getservbyname( port, NULL );
-				if( se == NULL )
+				if( (se = getservbyname( port, NULL )) == NULL )
 					goto error;
 				in->sin_port = se->s_port;
 			}
@@ -221,8 +222,8 @@ int Socket_setaddr_INET( tv, host, port, use )
 				}
 			}
 			else {
-				he = gethostbyname( host );
-				if( he == NULL )
+				struct hostent *he;
+				if( (he = gethostbyname( host )) == NULL )
 					goto error;
 				if( he->h_addrtype != AF_INET6 )
 					goto error;
@@ -240,8 +241,8 @@ int Socket_setaddr_INET( tv, host, port, use )
 				in6->sin6_port = se->s_port;
 			}
 		}
-	}
 #endif
+	}
 	goto exit;
 error:
 	GLOBAL_UNLOCK();
@@ -252,12 +253,9 @@ exit:
 	return 0;
 }
 
-int Socket_setaddr_BTH( tv, host, port, use )
-	my_thread_var_t *tv;
-	const char *host;
-	const char *port;
-	int use;
-{
+int Socket_setaddr_BTH(
+	my_thread_var_t *tv, const char *host, const char *port, int use
+) {
 	my_sockaddr_t *addr;
 	SOCKADDR_RFCOMM *rca;
 	SOCKADDR_L2CAP *l2a;
@@ -508,7 +506,12 @@ DWORD get_current_thread_id() {
 #endif
 }
 
+
 char *my_itoa( char *str, long value, int radix ) {
+	static const char HEXTAB[] = {
+		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+		'A', 'B', 'C', 'D', 'E', 'F'
+	};
 	int rem;
     char tmp[21], *ret = tmp, neg = 0;
 	if( value < 0 ) {
@@ -518,31 +521,9 @@ char *my_itoa( char *str, long value, int radix ) {
 	switch( radix ) {
 	case 16:
 		do {
-			rem = (int) ( value % 16 );
+			rem = (int) (value % 16);
 			value /= 16;
-			switch( rem ) {
-			case 10:
-				*ret ++ = 'A';
-				break;
-			case 11:
-				*ret ++ = 'B';
-				break;
-			case 12:
-				*ret ++ = 'C';
-				break;
-			case 13:
-				*ret ++ = 'D';
-				break;
-			case 14:
-				*ret ++ = 'E';
-				break;
-			case 15:
-				*ret ++ = 'F';
-				break;
-			default:
-				*ret ++ = (char) ( rem + '0' );
-				break;
-			}
+			*ret ++ = HEXTAB[rem];
 		} while( value > 0 );
 		break;
 	default:
@@ -597,10 +578,12 @@ char *my_strncpyu( char *dst, const char *src, size_t len ) {
 }
 
 int my_stricmp( const char *cs, const char *ct ) {
-	for( ; *cs != '\0'; cs ++, ct ++ )
-		if( toupper( *cs ) - toupper( *ct ) != 0 )
-			return 1;
-	return 0;
+	register signed char res;
+	while( 1 ) {
+		if( ( res = toupper( *cs ) - toupper( *ct ++ ) ) != 0 || ! *cs ++ )
+			break;
+	}
+	return res;
 }
 
 #ifdef SC_DEBUG

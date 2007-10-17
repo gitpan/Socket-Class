@@ -17,7 +17,7 @@ use bytes;
 use vars qw($VERSION @ISA);
 
 BEGIN {
-	$VERSION = '1.0.0';
+	$VERSION = '1.0';
 	@ISA = qw(Socket::Class);
 }
 

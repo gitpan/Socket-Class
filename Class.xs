@@ -1178,13 +1178,14 @@ PREINIT:
 #ifndef SC_OLDNET
 	struct addrinfo aih;
 	struct addrinfo *ail = NULL;
+	const char *s2;
+	int r;
 #else
 	struct hostent *he;
 #endif
-	const char *s1, *s2;
+	const char *s1;
 	my_sockaddr_t saddr;
 	STRLEN len;
-	int r;
 	SOCKADDR_L2CAP *l2a;
 PPCODE:
 	if( (tv = my_thread_var_find( this )) == NULL )
@@ -1248,14 +1249,14 @@ _default:
 				ST(0) = &PL_sv_undef;
 				goto _inet4e;
 			}
-			((struct sockaddr_in *) saddr.a)->sin_addr.s_addr =
-				inet_addr( he->h_addr );
+			((struct sockaddr_in *) saddr.a)->sin_addr =
+				*(struct in_addr*) he->h_addr;
 		}
 		if( items > 2 ) {
 			s1 = SvPV( ST(2), len );
 			if( s1[0] >= '0' && s1[0] <= '9' )
 				((struct sockaddr_in *) saddr.a)->sin_port
-					= htons( atol( s1 ) );
+					= htons( atoi( s1 ) );
 			else {
 				struct servent *se;
 				se = getservbyname( s1, NULL );
@@ -1407,14 +1408,15 @@ get_hostname( this, addr )
 	SV *addr;
 PREINIT:
 	my_thread_var_t *tv;
-	my_sockaddr_t *saddr, sa2;
-	int r;
+	my_sockaddr_t *saddr;
 	const char *s1;
-	char host[NI_MAXHOST], serv[NI_MAXSERV];
 	STRLEN l1;
 #ifndef SC_OLDNET
 	struct addrinfo aih;
 	struct addrinfo *ail = NULL;
+	char host[NI_MAXHOST], serv[NI_MAXSERV];
+	my_sockaddr_t sa2;
+	int r;
 #else
 	struct hostent *he;
 	struct in_addr ia4;
@@ -1490,7 +1492,7 @@ PPCODE:
 			TV_ERRNO( tv, 0 );
 			ST(0) = sv_2mortal( newSVpvn( he->h_name, strlen( he->h_name ) ) );
 #else
-			TV_ERROR( tv, -1, "not supported on this platform" );
+			TV_ERROR( tv, "not supported on this platform" );
 			ST(0) = &PL_sv_undef;
 #endif
 		}
@@ -1573,14 +1575,14 @@ PPCODE:
 		r = sprintf( tmp, "%u.%u.%u.%u",
 			IP4( ((struct sockaddr_in *) ail->ai_addr )->sin_addr.s_addr )
 		);
-		ST(0) = sv_2mortal( newSVpv( tmp, r ) );
+		ST(0) = sv_2mortal( newSVpvn( tmp, r ) );
 		break;
 	case AF_INET6:
 		p1 = &((struct sockaddr_in6 *) ail->ai_addr )->sin6_addr;
 		r = sprintf( tmp, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
 			IP6( (uint16_t *) p1 )
 		);
-		ST(0) = sv_2mortal( newSVpv( tmp, r ) );
+		ST(0) = sv_2mortal( newSVpvn( tmp, r ) );
 		break;
 	default:
 		ST(0) = &PL_sv_undef;
@@ -1599,14 +1601,15 @@ PPCODE:
 	}
 	switch( he->h_addrtype ) {
 	case AF_INET:
-		r = sprintf( tmp, "%u.%u.%u.%u", IP4( *((DWORD *) he->h_addr) ) );
-		ST(0) = sv_2mortal( newSVpv( tmp, r ) );
+		r = sprintf( tmp, "%u.%u.%u.%u",
+			IP4( (*(struct in_addr*) he->h_addr).s_addr ) );
+		ST(0) = sv_2mortal( newSVpvn( tmp, r ) );
 		break;
 	case AF_INET6:
 		r = sprintf( tmp, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
 			IP6( (uint16_t *) he->h_addr )
 		);
-		ST(0) = sv_2mortal( newSVpv( tmp, r ) );
+		ST(0) = sv_2mortal( newSVpvn( tmp, r ) );
 		break;
 	default:
 		ST(0) = &PL_sv_undef;

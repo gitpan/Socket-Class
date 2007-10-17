@@ -1,5 +1,9 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.13
+    - bug on windows fixed
+    - fixed wrong use of h_addr in hostent structure
+
 version 1.12
     - version style changed
     - "new()" now sets correct error code on failure
