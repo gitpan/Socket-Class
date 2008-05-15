@@ -4,7 +4,7 @@ Socket::Class - A class to communicate with sockets
 Socket::Class provides a simple, fast and efficient way to communicate with
 sockets.
 It operates outside of the PerlIO layer and can be used as a replacement
-of IO::Socket.
+to IO::Socket.
 Little parts of Bluetooth technology has been integrated. Please see below.
 
 The standard build includes Bluetooth protocols for RFCOMM (stream) and

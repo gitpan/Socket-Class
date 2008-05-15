@@ -21,10 +21,10 @@ BOOT:
 	MUTEX_INIT( &global.thread_lock );
 #endif
 #ifdef SC_OLDNET
-	sv_setiv( get_sv( __PACKAGE__ "::OLDNET", 1 ), 1 );
+	sv_setiv( get_sv( __PACKAGE__ "::OLDNET", TRUE ), 1 );
 #endif
 #ifdef SC_HAS_BLUETOOTH
-	sv_setiv( get_sv( __PACKAGE__ "::BLUETOOTH", 1 ), 1 );
+	sv_setiv( get_sv( __PACKAGE__ "::BLUETOOTH", TRUE ), 1 );
 	boot_Socket__Class__BT();
 #endif
 }
@@ -35,7 +35,7 @@ BOOT:
 # *****************************************************************************/
 
 void
-END()
+END( ... )
 PREINIT:
 	my_thread_var_t *tv1, *tv2;
 	u_long cascade;
@@ -43,13 +43,17 @@ CODE:
 	if( global.destroyed )
 		return;
 	global.destroyed = 1;
+#ifdef SC_DEBUG
 	_debug( "END called\n" );
+#endif
 	GLOBAL_LOCK();
 	for( cascade = 0; cascade < SC_TV_CASCADE; cascade ++ ) {
 		tv1 = global.first_thread[cascade];
 		while( tv1 != NULL ) {
 			tv2 = tv1->next;
+#ifdef SC_DEBUG
 			_debug( "freeing tv 0x%08x\n", tv1 );
+#endif
 			my_thread_var_free( tv1 );
 			tv1 = tv2;
 		}
@@ -65,16 +69,28 @@ CODE:
 
 
 #/*****************************************************************************
-# * CLONE_SKIP()
+# * CLONE()
 # *****************************************************************************/
 
 #ifdef USE_ITHREADS
 
 void
-CLONE_SKIP( ... )
+CLONE( this, ... )
+	SV *this;
+PREINIT:
+	my_thread_var_t *tv;
+	int i;
 PPCODE:
-	_debug( "CLONE_SKIP called\n" );
-	XSRETURN_NO;
+	GLOBAL_LOCK();
+	for( i = 0; i < SC_TV_CASCADE; i ++ ) {
+		for( tv = global.first_thread[i]; tv != NULL; tv = tv->next ) {
+#ifdef SC_DEBUG
+			_debug( "CLONE called for tv 0x%08X ref: %d\n", tv, tv->refcnt );
+#endif
+			tv->refcnt ++;
+		}
+	}
+	GLOBAL_UNLOCK();
 
 #endif
 
@@ -84,20 +100,19 @@ PPCODE:
 # *****************************************************************************/
 
 void
-DESTROY( this )
+DESTROY( this, ... )
 	SV *this;
 PREINIT:
-#ifndef SC_THREADS
 	my_thread_var_t *tv;
-#endif
 CODE:
-	_debug( "DESTROY called for tv 0x%08x\n", SvIV( SvRV( this ) ) );
-#ifndef SC_THREADS
-	tv = my_thread_var_find( this );
-	if( tv != NULL ) {
-		my_thread_var_rem( tv );
-	}
+	if( (tv = my_thread_var_find( this )) == NULL )
+		XSRETURN_EMPTY;
+#ifdef SC_DEBUG
+	_debug( "DESTROY called for tv 0x%08x ref: %d\n", tv, tv->refcnt );
 #endif
+	tv->refcnt --;
+	if( tv->refcnt < 0 )
+		my_thread_var_rem( tv );
 
 
 #/*****************************************************************************
@@ -126,7 +141,8 @@ PPCODE:
 	tv->timeout.tv_sec = 15;
 	/* read options */
 	for( i = 1; i < items - 1; i += 2 ) {
-		if( ! SvPOK( ST(i) ) ) continue;
+		if( ! SvPOK( ST(i) ) )
+			continue;
 		key = SvPVx( ST(i), lkey );
 		if( strcmp( key, "domain" ) == 0 ) {
 			if( SvIOK( ST(i + 1) ) ) {
@@ -205,8 +221,10 @@ PPCODE:
 	/* create the socket */
 	tv->sock = socket( tv->s_domain, tv->s_type, tv->s_proto );
 	if( tv->sock == INVALID_SOCKET ) {
+#ifdef SC_DEBUG
 		_debug( "socket(%d,%d,%d) create error %d\n",
 			tv->s_domain, tv->s_type, tv->s_proto, tv->sock );
+#endif
 		goto error;
 	}
 	/* set socket options */
@@ -242,8 +260,9 @@ PPCODE:
 			Socket_setaddr_UNIX( &tv->l_addr, la );
 			break;
 		}
-		
+#ifdef SC_DEBUG
 		_debug( "bind socket %d\n", tv->sock );
+#endif
 		if( bind(
 				tv->sock, (struct sockaddr *) tv->l_addr.a, tv->l_addr.l
 			) == SOCKET_ERROR
@@ -252,7 +271,9 @@ PPCODE:
 		tv->l_addr.l = SOCKADDR_SIZE_MAX;
 		getsockname( tv->sock, (struct sockaddr *) tv->l_addr.a, &tv->l_addr.l );
 		if( ln != 0 ) {
+#ifdef SC_DEBUG
 			_debug( "listen on %s %s\n", la, lp );
+#endif
 			if( listen( tv->sock, ln ) == SOCKET_ERROR )
 				goto error;
 			tv->state = SOCK_STATE_LISTEN;
@@ -276,7 +297,9 @@ PPCODE:
 		}
 		if( Socket_setblocking( tv->sock, 0 ) == SOCKET_ERROR )
 			goto error;
+#ifdef SC_DEBUG
 		_debug( "connect to %s %s\n", ra, rp );
+#endif
 		if( connect(
 				tv->sock, (struct sockaddr *) tv->r_addr.a, tv->r_addr.l
 			) == SOCKET_ERROR
@@ -297,19 +320,25 @@ PPCODE:
 						goto error;
 					}
 					if( i ) {
+#ifdef SC_DEBUG
 						_debug( "getsockopt SO_ERROR %d\n", i );
+#endif
 						global.last_errno = i;
 						goto error2;
 					}
 				}
 				else {
+#ifdef SC_DEBUG
 					_debug( "connect timed out %u\n", ETIMEDOUT );
+#endif
 					global.last_errno = ETIMEDOUT;
 					goto error2;
 				}	
 			}
 			else {
+#ifdef SC_DEBUG
 				_debug( "connect failed %d\n", i );
+#endif
 				global.last_errno = i;
 				goto error2;
 			}
@@ -334,20 +363,23 @@ PPCODE:
 	key = SvPV( class, lkey );
 	Newx( tv->classname, lkey + 1, char );
 	Copy( key, tv->classname, lkey + 1, char );
+#ifdef SC_DEBUG
 	_debug( "bless socket %d to %s\n", tv->sock, key );
+#endif
 	hv = gv_stashpv( key, 0 );
 	ST(0) = sv_bless( sv_2mortal( newRV( sv ) ), hv );
 	my_thread_var_add( tv );
 	global.last_errno = 0;
+	global.last_error[0] = '\0';
 	XSRETURN( 1 );
 error:
-	global.last_errno = Socket_errno();
+	GLOBAL_ERRNOLAST();
 error2:
 	XSRETURN_EMPTY;
 
 
 #/*****************************************************************************
-# * connect( this, ... )
+# * connect( this )
 # *****************************************************************************/
 
 void
@@ -435,8 +467,10 @@ PPCODE:
 			goto error;
 		}
 	}
+#ifdef SC_DEBUG
 	_debug( "connecting socket %d state %d addrlen %d\n",
 		tv->sock, tv->state, tv->r_addr.l );
+#endif
 	if( ! tv->non_blocking ) {
 		if( Socket_setblocking( tv->sock, 0 ) == SOCKET_ERROR ) {
 			tv->last_errno = Socket_errno();
@@ -463,19 +497,25 @@ PPCODE:
 					goto error;
 				}
 				if( r ) {
+#ifdef SC_DEBUG
 					_debug( "getsockopt SO_ERROR %d\n", r );
+#endif
 					tv->last_errno = r;
 					goto error;
 				}
 			}
 			else {
+#ifdef SC_DEBUG
 				_debug( "connect timed out %u\n", ETIMEDOUT );
+#endif
 				tv->last_errno = ETIMEDOUT;
 				goto error;
 			}	
 		}
 		else {
+#ifdef SC_DEBUG
 			_debug( "connect failed %d\n", r );
+#endif
 			tv->last_errno = r;
 			goto error;
 		}
@@ -509,7 +549,6 @@ PREINIT:
 PPCODE:
 	if( (tv = my_thread_var_find( this )) == NULL )
 		XSRETURN_EMPTY;
-	//shutdown( tv->sock, 2 );
 	my_thread_var_rem( tv );
 	XSRETURN_YES;
 
@@ -527,7 +566,9 @@ PPCODE:
 	if( (tv = my_thread_var_find( this )) == NULL )
 		XSRETURN_EMPTY;
 	TV_LOCK( tv );
+#ifdef SC_DEBUG
 	_debug( "closing socket %d tv %u\n", tv->sock, tv );
+#endif
 	Socket_close( tv->sock );
 	if( tv->s_domain == AF_UNIX ) {
 		remove( ((struct sockaddr_un *) tv->l_addr.a)->sun_path );
@@ -697,19 +738,23 @@ PPCODE:
 		TV_ERRNOLAST( tv );
 		switch( tv->last_errno ) {
 		case EWOULDBLOCK:
-			// threat not as an error
+			/* threat not as an error */
 			tv->last_errno = 0;
 			TV_UNLOCK( tv );
 			XSRETURN_NO;
 		default:
+#ifdef SC_DEBUG
 			_debug( "accept error %u\n", tv->last_errno );
+#endif
 			tv->state = SOCK_STATE_ERROR;
 			TV_UNLOCK( tv );
 			XSRETURN_EMPTY;
 		}
 	}
 	Newxz( tv2, 1, my_thread_var_t );
+#ifdef SC_DEBUG
 	_debug( "accepting socket %d tv 0x%08x %u:%u\n", s, tv2, tv->l_addr.l, addr.l );
+#endif
 	tv2->s_domain = tv->s_domain;
 	tv2->s_type = tv->s_type;
 	tv2->s_proto = tv->s_proto;
@@ -752,17 +797,18 @@ PPCODE:
 		TV_ERRNOLAST( tv );
 		switch( tv->last_errno ) {
 		case EWOULDBLOCK:
-			// threat not as an error
+			/* threat not as an error */
 			tv->last_errno = 0;
 			TV_UNLOCK( tv );
 			XSRETURN_NO;
 		default:
+#ifdef SC_DEBUG
 			_debug( "recv error %u\n", tv->last_errno );
+#endif
 			tv->state = SOCK_STATE_ERROR;
 			TV_UNLOCK( tv );
 			XSRETURN_EMPTY;
 		}
-		sv_setpvn( buf, "", 0 );
 	}
 	else if( r != 0 ) {
 		tv->last_errno = 0;
@@ -800,12 +846,14 @@ PPCODE:
 		TV_ERRNOLAST( tv );
 		switch( tv->last_errno ) {
 		case EWOULDBLOCK:
-			// threat not as an error
+			/* threat not as an error */
 			tv->last_errno = 0;
 			TV_UNLOCK( tv );
 			XSRETURN_NO;
 		default:
+#ifdef SC_DEBUG
 			_debug( "send error %u\n", tv->last_errno );
+#endif
 			tv->state = SOCK_STATE_ERROR;
 			TV_UNLOCK( tv );
 			XSRETURN_EMPTY;
@@ -817,7 +865,9 @@ PPCODE:
 		XSRETURN_IV( r );
 	}
 	tv->last_errno = ECONNRESET;
+#ifdef SC_DEBUG
 	_debug( "send error %u\n", tv->last_errno );
+#endif
 	tv->state = SOCK_STATE_ERROR;
 	TV_UNLOCK( tv );
 	XSRETURN_EMPTY;
@@ -852,15 +902,16 @@ PPCODE:
 	);
 	if( r == SOCKET_ERROR ) {
 		TV_ERRNOLAST( tv );
-		sv_setpvn( buf, "", 0 );
 		switch( tv->last_errno ) {
 		case EWOULDBLOCK:
-			// threat not as an error
+			/* threat not as an error */
 			tv->last_errno = 0;
 			TV_UNLOCK( tv );
 			XSRETURN_NO;
 		default:
+#ifdef SC_DEBUG
 			_debug( "recvfrom error %u\n", tv->last_errno );
+#endif
 			tv->state = SOCK_STATE_ERROR;
 			TV_UNLOCK( tv );
 			XSRETURN_EMPTY;
@@ -869,7 +920,7 @@ PPCODE:
 	else if( r != 0 ) {
 		tv->last_errno = 0;
 		sv_setpvn( buf, tv->rcvbuf, r );
-		// remember who we received from
+		/* remember who we received from */
 		Copy( &peer, &tv->r_addr, peer.l + sizeof( int ), BYTE );
 		TV_UNLOCK( tv );
 		ST(0) = sv_2mortal( newSVpvn( (char *) &peer, MYSASIZE( peer ) ) );
@@ -909,7 +960,7 @@ PPCODE:
 				"Invalid address"
 			);
 		}
-		// remember who we send to
+		/* remember who we send to */
 		Copy( peer, &tv->r_addr, len, BYTE );
 	}
 	else {
@@ -924,12 +975,14 @@ PPCODE:
 		TV_ERRNOLAST( tv );
 		switch( tv->last_errno ) {
 		case EWOULDBLOCK:
-			// threat not as an error
+			/* threat not as an error */
 			tv->last_errno = 0;
 			TV_UNLOCK( tv );
 			XSRETURN_NO;
 		default:
+#ifdef SC_DEBUG
 			_debug( "sendto error %u\n", tv->last_errno );
+#endif
 			tv->state = SOCK_STATE_ERROR;
 			TV_UNLOCK( tv );
 			XSRETURN_EMPTY;
@@ -969,7 +1022,6 @@ PPCODE:
 	}
 	while( len > 0 ) {
 		r = recv( tv->sock, &tv->rcvbuf[pos], (int) len, 0 );
-		//_debug( "got %d of %d pos %d\n", r, len, pos );
 		if( r == SOCKET_ERROR ) {
 			if( pos > 0 )
 				break;
@@ -977,12 +1029,14 @@ PPCODE:
 			TV_ERRNOLAST( tv );
 			switch( tv->last_errno ) {
 			case EWOULDBLOCK:
-				// threat not as an error
+				/* threat not as an error */
 				tv->last_errno = 0;
 				TV_UNLOCK( tv );
 				XSRETURN_NO;
 			default:
+#ifdef SC_DEBUG
 				_debug( "read error %u\n", tv->last_errno );
+#endif
 				tv->state = SOCK_STATE_ERROR;
 				TV_UNLOCK( tv );
 				XSRETURN_EMPTY;
@@ -992,7 +1046,9 @@ PPCODE:
 			if( pos > 0 )
 				break;
 			tv->last_errno = ECONNRESET;
+#ifdef SC_DEBUG
 			_debug( "read error %u\n", tv->last_errno );
+#endif
 			tv->state = SOCK_STATE_ERROR;
 			TV_UNLOCK( tv );
 			XSRETURN_EMPTY;
@@ -1121,12 +1177,14 @@ PPCODE:
 			tv->last_errno = Socket_errno();
 			switch( tv->last_errno ) {
 			case EWOULDBLOCK:
-				// threat not as an error
+				/* threat not as an error */
 				tv->last_errno = 0;
 				ST(0) = sv_2mortal( newSVpvn( "", 0 ) );
 				break;
 			default:
+#ifdef SC_DEBUG
 				_debug( "readline error %u\n", tv->last_errno );
+#endif
 				tv->state = SOCK_STATE_ERROR;
 				ST(0) = &PL_sv_undef;
 				break;
@@ -1137,15 +1195,19 @@ PPCODE:
 			if( pos > 0 )
 				break;
 			tv->last_errno = ECONNRESET;
+#ifdef SC_DEBUG
 			_debug( "readline error %u\n", tv->last_errno );
+#endif
 			tv->state = SOCK_STATE_ERROR;
 			ST(0) = &PL_sv_undef;
 			goto exit;
 		}
 		for( i = 0; i < (size_t) r; i ++ ) {
 			if( tv->rcvbuf[pos + i] == '\n' ) {
-				// found newline
+				/* found newline */
+#ifdef SC_DEBUG
 				_debug( "found newline at %d + %d of %d\n", pos, i, r );
+#endif
 				/*
 				if( pos + i > 0 && tv->rcvbuf[pos + i - 1] == '\r' ) {
 					i --;
@@ -1222,8 +1284,16 @@ _default:
 		s2 = items > 2 ? SvPV( ST(2), len ) : NULL;
 		r = getaddrinfo( s1, s2, &aih, &ail );
 		if( r != 0 ) {
+#ifdef SC_DEBUG
 			_debug( "getaddrinfo('%s', '%s') failed %d\n", s1, s2, r );
+#endif
 			TV_ERRNO( tv, r );
+#ifndef _WIN32
+			{
+				const char *s1 = gai_strerror( r );
+				strncpy( tv->last_error, s1, sizeof( tv->last_error ) );
+			}
+#endif
 			ST(0) = &PL_sv_undef;
 			goto exit;
 		}
@@ -1284,7 +1354,9 @@ _inet4e:
 					AF_INET6, s1, &((struct sockaddr_in6 *) saddr.a)->sin6_addr
 				) != 0 )
 			{
+#ifdef SC_DEBUG
 				_debug( "inet_pton failed %d\n", Socket_errno() );
+#endif
 				TV_ERRNOLAST( tv );
 				ST(0) = &PL_sv_undef;
 				goto _inet6e;
@@ -1403,7 +1475,7 @@ PPCODE:
 # *****************************************************************************/
 
 void
-get_hostname( this, addr )
+get_hostname( this, addr = NULL )
 	SV *this;
 	SV *addr;
 PREINIT:
@@ -1426,8 +1498,14 @@ PPCODE:
 	if( (tv = my_thread_var_find( this )) == NULL )
 		XSRETURN_EMPTY;
 	TV_LOCK( tv );
-	s1 = SvPV( addr, l1 );
-	saddr = (my_sockaddr_t *) s1;
+	if( addr != NULL ) {
+		s1 = SvPV( addr, l1 );
+		saddr = (my_sockaddr_t *) s1;
+	}
+	else {
+		saddr = &tv->r_addr;
+		l1 = MYSASIZE(tv->r_addr);
+	}
 #ifndef SC_OLDNET
 	if( l1 <= sizeof( int ) || l1 != MYSASIZE(*saddr) ) {
 		memset( &aih, 0, sizeof( struct addrinfo ) );
@@ -1438,9 +1516,18 @@ PPCODE:
 		*/
 		r = getaddrinfo( s1, "", &aih, &ail );
 		if( r != 0 ) {
+#ifdef SC_DEBUG
 			_debug( "getaddrinfo() failed %d\n", r );
+#endif
 			TV_ERRNO( tv, r );
+#ifndef _WIN32
+			{
+				const char *s1 = gai_strerror( r );
+				strncpy( tv->last_error, s1, sizeof( tv->last_error ) );
+			}
+#endif
 			ST(0) = &PL_sv_undef;
+			goto exit;
 		}
 		sa2.l = (int) ail->ai_addrlen;
 		memcpy( sa2.a, ail->ai_addr, ail->ai_addrlen );
@@ -1454,9 +1541,18 @@ PPCODE:
 		NI_NUMERICSERV | NI_NAMEREQD
 	);
 	if( r != 0 ) {
-		_debug( "getnameinfo() failed %d\n", r );
-		TV_ERRNOLAST( tv );
+#ifdef SC_DEBUG
+		_debug( "getnameinfo failed %d\n", r );
+#endif
+#ifndef _WIN32
+		{
+			const char *s1 = gai_strerror( r );
+			strncpy( tv->last_error, s1, sizeof( tv->last_error ) );
+		}
+#endif
+		tv->last_errno = r;
 		ST(0) = &PL_sv_undef;
+		goto exit;
 	}
 	ST(0) = sv_2mortal( newSVpvn( host, strlen( host ) ) );
 #else
@@ -1565,7 +1661,9 @@ PPCODE:
 	*/
 	r = getaddrinfo( sname, "", &aih, &ail );
 	if( r != 0 ) {
+#ifdef SC_DEBUG
 		_debug( "getaddrinfo() failed %d\n", r );
+#endif
 		TV_ERRNO( tv, r );
 		ST(0) = &PL_sv_undef;
 		goto _exit;		
@@ -1593,7 +1691,9 @@ PPCODE:
 	GLOBAL_LOCK();
 	he = gethostbyname( sname );
 	if( he == NULL ) {
+#ifdef SC_DEBUG
 		_debug( "gethostbyname() failed %d\n", Socket_errno() );
+#endif
 		TV_ERRNOLAST( tv );
 		GLOBAL_UNLOCK();
 		ST(0) = &PL_sv_undef;
@@ -1621,6 +1721,380 @@ _exit:
 	TV_UNLOCK( tv );
 	XSRETURN( 1 );
 
+
+#ifndef SC_OLDNET
+
+#/*****************************************************************************
+# * getaddrinfo( this, node, service [, family [, proto [, type [, flags ]]]] )
+# *****************************************************************************/
+
+void
+getaddrinfo( ... )
+PREINIT:
+	my_thread_var_t *tv;
+	int ipos = 0, r;
+	struct addrinfo aih;
+	struct addrinfo *ail = NULL, *ai;
+	const char *host, *service;
+	HV *hv;
+	int use_aih = 0;
+	char tmp[40];
+	my_sockaddr_t saddr;
+PPCODE:
+	if( items > 0 ) {
+		if( (tv = my_thread_var_find( ST(0) )) != NULL ) {
+			ipos ++;
+		}
+		else if(
+			SvPOK( ST(0) ) &&
+			strcmp( SvPV_nolen( ST(0) ), __PACKAGE__ ) == 0
+		) {
+			ipos ++;
+		}
+	}
+	if( items - ipos < 1 )
+		Perl_croak( aTHX_ "Usage: Socket::Class::getaddrinfo(node, ...)" );
+	if( tv != NULL ) {
+		TV_LOCK( tv );
+	}
+	else {
+		GLOBAL_LOCK();
+	}
+	if( SvOK( ST(ipos) ) )
+		host = SvPV_nolen( ST(ipos) );
+	else
+		host = NULL;
+	ipos ++;
+	if( ipos < items && SvOK( ST(ipos) ) )
+		service = SvPV_nolen( ST(ipos) );
+	else
+		service = NULL;
+	ipos ++;
+	if( ipos < items ) {
+		use_aih = 1;
+		memset( &aih, 0, sizeof(struct addrinfo) );
+		if( SvIOK( ST(ipos) ) )
+			aih.ai_family = (int) SvIV( ST(ipos) );
+		else
+			aih.ai_family = Socket_domainbyname( SvPV_nolen( ST(ipos) ) );
+#ifdef SC_DEBUG
+		_debug( "using family %d\n", aih.ai_family );
+#endif
+		ipos ++;
+	}
+	if( ipos < items ) {
+		if( SvIOK( ST(ipos) ) )
+			aih.ai_protocol = (int) SvIV( ST(ipos) );
+		else
+			aih.ai_protocol = Socket_protobyname( SvPV_nolen( ST(ipos) ) );
+#ifdef SC_DEBUG
+		_debug( "using protocol %d\n", aih.ai_protocol );
+#endif
+		ipos ++;
+	}
+	if( ipos < items ) {
+		if( SvIOK( ST(ipos) ) )
+			aih.ai_socktype = (int) SvIV( ST(ipos) );
+		else
+			aih.ai_socktype = Socket_typebyname( SvPV_nolen( ST(ipos) ) );
+#ifdef SC_DEBUG
+		_debug( "using socktype %d\n", aih.ai_socktype );
+#endif
+		ipos ++;
+	}
+	if( ipos < items ) {
+		aih.ai_flags = (int) SvIV( ST(ipos) );
+		ipos ++;
+	}
+	r = getaddrinfo( host, service, use_aih ? &aih : NULL, &ail );
+	if( r ) {
+#ifdef SC_DEBUG
+		_debug( "getaddrinfo failed %d\n", r );
+#endif
+		if( tv != NULL ) {
+#ifndef _WIN32
+			const char *s1 = gai_strerror( r );
+			strncpy( tv->last_error, s1, sizeof(tv->last_error) );
+#endif
+			tv->last_errno = r;
+			TV_UNLOCK( tv );
+		}
+		else {
+#ifndef _WIN32
+			GLOBAL_ERROR( r, gai_strerror( r ) );
+#else
+			GLOBAL_ERRNO( r );
+#endif
+			GLOBAL_UNLOCK();
+		}
+		XSRETURN_EMPTY;
+	}
+	for( ai = ail; ai != NULL; ai = ai->ai_next ) {
+		hv = (HV *) sv_2mortal( (SV *) newHV() );
+		hv_store( hv, "family", 6, newSViv( ai->ai_family ), 0 );
+		hv_store( hv, "protocol", 8, newSViv( ai->ai_protocol ), 0 );
+		hv_store( hv, "socktype", 8, newSViv( ai->ai_socktype ), 0 );
+		saddr.l = (socklen_t) ai->ai_addrlen;
+		memcpy( saddr.a, ai->ai_addr, ai->ai_addrlen );
+		hv_store( hv, "paddr", 5, newSVpvn( (char *) &saddr, MYSASIZE(saddr) ), 0 );
+		if( ai->ai_canonname != NULL )
+			hv_store( hv, "canonname", 9, newSVpv( ai->ai_canonname, 0 ), 0 );
+		/* familyname */
+		switch( ai->ai_family ) {
+		case AF_INET:
+			hv_store( hv, "familyname", 10, newSVpvn( "INET", 4 ), 0 );
+			r = sprintf( tmp, "%u.%u.%u.%u",
+				IP4( ((struct sockaddr_in *) ai->ai_addr )->sin_addr.s_addr )
+			);
+			hv_store( hv, "addr", 4, newSVpvn( tmp, r ), 0 );
+			hv_store( hv, "port", 4, newSViv(
+				ntohs( ((struct sockaddr_in *) ai->ai_addr )->sin_port ) ), 0 );
+			break;
+		case AF_INET6:
+			hv_store( hv, "familyname", 10, newSVpvn( "INET6", 5 ), 0 );
+			r = sprintf( tmp, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
+				IP6( (uint16_t *) &((struct sockaddr_in6 *) ai->ai_addr)->sin6_addr )
+			);
+			hv_store( hv, "addr", 4, newSVpv( tmp, r ), 0 );
+			hv_store( hv, "port", 4, newSViv(
+				ntohs( ((struct sockaddr_in6 *) ai->ai_addr)->sin6_port ) ), 0 );
+			break;
+		case AF_UNIX:
+			hv_store( hv, "familyname", 10, newSVpvn( "UNIX", 4 ), 0 );
+			hv_store( hv, "path", 4, newSVpv(
+				((struct sockaddr_un *) ai->ai_addr)->sun_path, 0 ), 0 );
+			break;
+		case AF_BLUETOOTH:
+			hv_store( hv, "familyname", 10, newSVpvn( "BTH", 3 ), 0 );
+			if( ai->ai_protocol == BTPROTO_L2CAP ) {
+				r = my_ba2str(
+					&((SOCKADDR_L2CAP *) ai->ai_addr)->bt_bdaddr, tmp );
+				hv_store( hv, "addr", 4, newSVpv( tmp, r ), 0 );
+				hv_store( hv, "port", 4,
+					newSViv( ((SOCKADDR_L2CAP *) ai->ai_addr)->bt_port ), 0 );
+			}
+			break;
+		case AF_IRDA:
+			hv_store( hv, "familyname", 10, newSVpvn( "IRDA", 4 ), 0 );
+			/*
+			hv_store( hv, "deviceid", 8,
+				newSVpv( ((SOCKADDR_IRDA *) ai->ai_addr)->irdaDeviceID, 0 ), 0 );
+			*/
+			break;
+		}
+		/* sockname */
+		switch( ai->ai_socktype ) {
+		case SOCK_STREAM:
+			hv_store( hv, "sockname", 8, newSVpvn( "STREAM", 6 ), 0 );
+			break;
+		case SOCK_DGRAM:
+			hv_store( hv, "sockname", 8, newSVpvn( "DGRAM", 5 ), 0 );
+			break;
+		case SOCK_RAW:
+			hv_store( hv, "sockname", 8, newSVpvn( "RAW", 3 ), 0 );
+			break;
+		case SOCK_RDM:
+			hv_store( hv, "sockname", 8, newSVpvn( "RDM", 3 ), 0 );
+			break;
+		case SOCK_SEQPACKET:
+			hv_store( hv, "sockname", 8, newSVpvn( "SEQPACKET", 9 ), 0 );
+			break;
+		}
+		/* protoname */
+		switch( ai->ai_family ) {
+		case AF_INET:
+		case AF_INET6:
+			switch( ai->ai_protocol ) {
+			case IPPROTO_TCP:
+				hv_store( hv, "protoname", 9, newSVpvn( "TCP", 3 ), 0 );
+				break;
+			case IPPROTO_UDP:
+				hv_store( hv, "protoname", 9, newSVpvn( "UDP", 3 ), 0 );
+				break;
+			case IPPROTO_ICMP:
+				hv_store( hv, "protoname", 9, newSVpvn( "ICMP", 4 ), 0 );
+				break;
+			}
+			break;
+		case AF_BLUETOOTH:
+			switch( ai->ai_protocol ) {
+			case BTPROTO_RFCOMM:
+				hv_store( hv, "protoname", 9, newSVpvn( "RFCOMM", 6 ), 0 );
+				break;
+			case BTPROTO_L2CAP:
+				hv_store( hv, "protoname", 9, newSVpvn( "L2CAP", 5 ), 0 );
+				break;
+			}
+			break;
+		}
+		XPUSHs( sv_2mortal( newRV( (SV *) hv ) ) );
+	}
+	freeaddrinfo( ail );
+	if( tv != NULL ) {
+		TV_ERRNO( tv, 0 );
+		TV_UNLOCK( tv );
+	}
+	else {
+		global.last_errno = 0;
+		global.last_error[0] = '\0';
+		GLOBAL_UNLOCK();
+	}
+
+
+#/*****************************************************************************
+# * getnameinfo( this, addr, port, family, flags )
+# *****************************************************************************/
+
+void
+getnameinfo( ... )
+PREINIT:
+	my_thread_var_t *tv;
+	int ipos = 0, r;
+	STRLEN len;
+	char host[NI_MAXHOST];
+	char serv[NI_MAXSERV];
+	int family = AF_UNSPEC;
+	char *addr;
+	char *port = NULL;
+	int flags = 0;
+	my_sockaddr_t saddr, *psaddr;
+	struct addrinfo aih;
+	struct addrinfo *ail = NULL;
+PPCODE:
+	if( items > 0 ) {
+		if( (tv = my_thread_var_find( ST(0) )) != NULL ) {
+			ipos ++;
+		}
+		else if(
+			SvPOK( ST(0) ) &&
+			strcmp( SvPV_nolen( ST(0) ), __PACKAGE__ ) == 0
+		) {
+			ipos ++;
+		}
+	}
+	if( items - ipos < 1 )
+		Perl_croak( aTHX_ "Usage: Socket::Class::getnameinfo(addr, ...)" );
+	if( tv != NULL ) {
+		TV_LOCK( tv );
+	}
+	else {
+		GLOBAL_LOCK();
+	}
+	psaddr = (my_sockaddr_t *) SvPVbyte( ST(ipos), len );
+	if( len > sizeof( int ) && len == MYSASIZE(*psaddr) ) {
+		/* packed address */
+		ipos ++;
+		if( ipos < items ) {
+			flags = (int) SvIV( ST(ipos) );
+			ipos ++;
+		}
+	}
+	else {
+		addr = SvPV_nolen( ST(ipos) );
+		ipos ++;
+		if( ipos < items ) {
+			port = SvPV_nolen( ST(ipos) );
+			ipos ++;
+		}
+		if( ipos < items ) {
+			if( SvIOK( ST(ipos) ) )
+				family = (int) SvIV( ST(ipos) );
+			else
+				family = Socket_domainbyname( SvPV_nolen( ST(ipos) ) );
+			ipos ++;
+		}
+		if( ipos < items ) {
+			flags = (int) SvIV( ST(ipos) );
+			ipos ++;
+		}
+		memset( &aih, 0, sizeof( struct addrinfo ) );
+		aih.ai_family = family;
+		/*aih.ai_flags = AI_NUMERICHOST;*/
+		r = getaddrinfo( addr, port, &aih, &ail );
+		if( r != 0 ) {
+#ifdef SC_DEBUG
+			_debug( "getaddrinfo failed %d\n", r );
+#endif
+			if( tv != NULL ) {
+#ifndef _WIN32
+				const char *s1 = gai_strerror( r );
+				strncpy( tv->last_error, s1, sizeof( tv->last_error ) );
+#endif
+				tv->last_errno = r;
+				TV_UNLOCK( tv );
+			}
+			else {
+#ifndef _WIN32
+				GLOBAL_ERROR( r, gai_strerror( r ) );
+#else
+				GLOBAL_ERRNO( r );
+#endif
+				GLOBAL_UNLOCK();
+			}
+			XSRETURN_EMPTY;
+		}
+		saddr.l = (socklen_t) ail->ai_addrlen;
+		memcpy( saddr.a, ail->ai_addr, ail->ai_addrlen );
+		freeaddrinfo( ail );
+		psaddr = &saddr;
+	}
+	r = getnameinfo(
+		(struct sockaddr *) psaddr->a, psaddr->l,
+		host, sizeof( host ),
+		serv, sizeof( serv ),
+		flags
+	);
+	if( r != 0 ) {
+#ifdef SC_DEBUG
+		_debug( "getnameinfo failed %d\n", r );
+#endif
+		if( tv != NULL ) {
+#ifndef _WIN32
+			const char *s1 = gai_strerror( r );
+			strncpy( tv->last_error, s1, sizeof( tv->last_error ) );
+#endif
+			tv->last_errno = r;
+			TV_UNLOCK( tv );
+		}
+		else {
+#ifndef _WIN32
+			GLOBAL_ERROR( r, gai_strerror( r ) );
+#else
+			GLOBAL_ERRNO( r );
+#endif
+			GLOBAL_UNLOCK();
+		}
+		XSRETURN_EMPTY;
+	}
+	if( tv != NULL ) {
+		TV_ERRNO( tv, 0 );
+		TV_UNLOCK( tv );
+	}
+	else {
+		global.last_errno = 0;
+		global.last_error[0] = '\0';
+		GLOBAL_UNLOCK();
+	}
+	ST(0) = sv_2mortal( newSVpvn( host, strlen( host ) ) );
+	if( GIMME_V != G_ARRAY )
+		XSRETURN(1);
+	ST(1) = sv_2mortal( newSVpvn( serv, strlen( serv ) ) );
+	XSRETURN(2);
+
+
+#else
+
+void
+getaddrinfo( ... )
+PPCODE:
+	Perl_croak( aTHX_ "getaddrinfo is not supported by your system" );
+
+void
+getnameinfo( ... )
+PPCODE:
+	Perl_croak( aTHX_ "getnameinfo is not supported by your system" );
+
+#endif
 
 #/*****************************************************************************
 # * set_blocking( this [, bool] )
@@ -1968,7 +2442,9 @@ PPCODE:
 		case SO_RCVTIMEO:
 		case SO_SNDTIMEO:
 #ifdef _WIN32
-			printf( "optlen %d\n", l );
+#ifdef SC_DEBUG
+			_debug( "optlen %d\n", l );
+#endif
 			if( GIMME_V == G_ARRAY ) {
 				XPUSHs( sv_2mortal(
 					newSVuv( *((DWORD *) tmp) / 1000 ) ) );
@@ -2001,11 +2477,11 @@ PPCODE:
 _chk:
 #ifdef _WIN32
 	if( l == sizeof( DWORD ) ) {
-		// just a try
+		/* just a try */
 		XPUSHs( sv_2mortal( newSVuv( *((DWORD *) tmp) ) ) );
 #else
 	if( l == sizeof( int ) ) {
-		// just a try
+		/* just a try */
 		XPUSHs( sv_2mortal( newSViv( *((int *) tmp) ) ) );
 #endif
 	}
@@ -2086,7 +2562,9 @@ PPCODE:
 	}
 	if( ret < 0 ) {
 		TV_ERRNOLAST( tv );
+#ifdef SC_DEBUG
 		_debug( "is_readable error %u\n", tv->last_errno );
+#endif
 		tv->state = SOCK_STATE_ERROR;
 		ST(0) = &PL_sv_undef;
 	}
@@ -2133,7 +2611,9 @@ PPCODE:
 	}
 	if( ret < 0 ) {
 		TV_ERRNOLAST( tv );
+#ifdef SC_DEBUG
 		_debug( "is_writable error %u\n", tv->last_errno );
+#endif
 		tv->state = SOCK_STATE_ERROR;
 		ST(0) = &PL_sv_undef;
 	}
@@ -2198,7 +2678,9 @@ PPCODE:
 	);
 	if( ret < 0 ) {
 		TV_ERRNOLAST( tv );
+#ifdef SC_DEBUG
 		_debug( "select error %u\n", tv->last_errno );
+#endif
 		tv->state = SOCK_STATE_ERROR;
 		ST(0) = &PL_sv_undef;
 	}

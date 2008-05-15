@@ -3,8 +3,7 @@ package Socket::Class::Async;
 use 5.008;
 
 use Carp();
-use Socket::Class ();
-use Socket::Class::Const qw($SOS_LISTEN $SOS_CONNECTED);
+use Socket::Class ($SOS_LISTEN $SOS_CONNECTED);
 
 use threads;
 use threads::shared;

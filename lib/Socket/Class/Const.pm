@@ -9,6 +9,9 @@ use vars qw($VERSION $WIN);
 BEGIN {
 	$VERSION = '1.0';
 	$WIN = $^O eq 'MSWin32';
+	# register global functions for export
+	*getaddrinfo = \&Socket::Class::getaddrinfo;
+	*getnameinfo = \&Socket::Class::getnameinfo;
 }
 
 # address family types
@@ -87,6 +90,21 @@ our $SOS_CONNECTED		= 3;
 our $SOS_CLOSED			= 4;
 our $SOS_ERROR			= 99;
 
+# getaddrinfo flags
+our $AI_PASSIVE					= 0x0001;
+our $AI_CANONNAME				= 0x0002;
+our $AI_NUMERICHOST				= 0x0004;
+our $AI_ADDRCONFIG				= 0x0400;
+our $AI_NUMERICSERV				= 0x0400;
+
+# getnameinfo flags
+our $NI_NUMERICHOST				= $WIN ? 2 : 1;
+our $NI_NUMERICSERV				= $WIN ? 8 : 2;
+our $NI_NOFQDN					= $WIN ? 1 : 4;
+our $NI_NAMEREQD				= $WIN ? 4 : 8;
+our $NI_DGRAM					= 16;
+
+
 our @EXPORT_OK = qw(
 	$AF_UNIX $AF_INET $AF_INET6 $AF_BLUETOOTH
 	$PF_UNIX $PF_INET $PF_INET6 $PF_BLUETOOTH
@@ -103,6 +121,9 @@ our @EXPORT_OK = qw(
 	$TCP_NODELAY
 	$SD_RECEIVE $SD_SEND $SD_BOTH
 	$SOS_INIT $SOS_BOUND $SOS_LISTEN $SOS_CONNECTED $SOS_CLOSED $SOS_ERROR
+	$AI_PASSIVE $AI_CANONNAME $AI_NUMERICHOST $AI_ADDRCONFIG $AI_NUMERICSERV
+	$NI_NUMERICHOST $NI_NUMERICSERV $NI_NOFQDN $NI_NAMEREQD $NI_DGRAM
+	&getaddrinfo &getnameinfo
 );
 
 our %EXPORT_TAGS = (
@@ -422,9 +443,68 @@ Socket got an error on last send oder receive
 
 =back
 
+=head2 I<getaddrinfo()> flags
+
+=over 4
+
+=item $AI_PASSIVE
+
+The socket address will be used in a call to the bind function.
+
+=item $AI_CANONNAME
+
+The canonical name is returned in the first 'canonname' member.
+
+=item $AI_NUMERICHOST
+
+The 'node' parameter passed to the getaddrinfo function must be a
+numeric string.
+
+=item $AI_ADDRCONFIG
+
+(Windows) The getaddrinfo will resolve only if a global address is configured.
+The IPv6 and IPv4 loopback address is not considered a valid global address.
+
+=item $AI_NUMERICSERV
+
+(Posix) Don't use name resolution.
+
+=back
+
+=head2 I<getnameinfo()> flags
+
+=over 4
+
+=item $NI_NUMERICHOST
+
+If set, then the numeric form of the hostname is returned. 
+(When not set, this will still happen in case the node's name cannot be looked
+up.)
+
+=item $NI_NUMERICSERV
+
+If set, then the service address is returned in numeric form, for example by
+its port number.
+
+=item $NI_NOFQDN
+
+If set, return only the hostname part of the FQDN for local hosts.
+
+=item $NI_NAMEREQD
+
+If set, then a error is returned if the hostname cannot be looked up.
+
+=item $NI_DGRAM
+
+If set, then the service is datagram (UDP) based rather than stream (TCP)
+based. This is required for the few ports (512-514) that have different
+services for UDP and TCP.
+
+=back
+
 =head1 AUTHORS
 
-Christian Mueller <christian_at_hbr1.com>
+Written and currently maintained by Christian Mueller
 
 =head1 COPYRIGHT
 

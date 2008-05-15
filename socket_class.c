@@ -3,9 +3,10 @@
 my_global_t global;
 
 void my_thread_var_add( my_thread_var_t *tv ) {
-	u_long cascade = (u_long) tv % SC_TV_CASCADE;
+	size_t cascade = (size_t) tv % SC_TV_CASCADE;
+#ifdef SC_DEBUG
 	_debug( "add tv 0x%08x cascade %u\n", tv, cascade );
-	tv->tid = get_current_thread_id();
+#endif
 #ifdef SC_THREADS
 	MUTEX_INIT( &tv->thread_lock );
 #endif
@@ -22,7 +23,9 @@ void my_thread_var_add( my_thread_var_t *tv ) {
 
 void my_thread_var_free( my_thread_var_t *tv ) {
 	TV_LOCK( tv );
-	_debug( "closing socket %d tv 0x%08x\n", tv->sock, tv );
+#ifdef SC_DEBUG
+	_debug( "free tv 0x%08x socket %d\n", tv, tv->sock );
+#endif
 	Socket_close( tv->sock );
 	if( tv->s_domain == AF_UNIX ) {
 		remove( ((struct sockaddr_un *) tv->l_addr.a)->sun_path );
@@ -37,9 +40,11 @@ void my_thread_var_free( my_thread_var_t *tv ) {
 }
 
 void my_thread_var_rem( my_thread_var_t *tv ) {
-	u_long cascade = (u_long) tv % SC_TV_CASCADE;
+	size_t cascade = (size_t) tv % SC_TV_CASCADE;
 	GLOBAL_LOCK();
-	_debug( "removing thread_var 0x%08x tid 0x%08x\n", tv, get_current_thread_id() );
+#ifdef SC_DEBUG
+	_debug( "removing thread_var 0x%08x\n", tv );
+#endif
 	if( tv == global.last_thread[cascade] )
 		global.last_thread[cascade] = tv->prev;
 	if( tv == global.first_thread[cascade] )
@@ -53,15 +58,14 @@ void my_thread_var_rem( my_thread_var_t *tv ) {
 }
 
 my_thread_var_t *my_thread_var_find( SV *sv ) {
-	u_long cascade;
+	size_t cascade;
 	register my_thread_var_t *tvf, *tvl, *tv;
 	if( global.destroyed )
 		return NULL;
 	if( ! SvROK( sv ) || ! ( sv = SvRV( sv ) ) || ! SvIOK( sv ) ) return NULL;
 	tv = INT2PTR( my_thread_var_t *, SvIV( sv ) );
-	cascade = (u_long) tv % SC_TV_CASCADE;
+	cascade = (size_t) tv % SC_TV_CASCADE;
 	GLOBAL_LOCK();
-	//_debug( "looking for tv %u\n", tv );
 	tvf = global.first_thread[cascade];
 	tvl = global.last_thread[cascade];
 	while( 1 ) {
@@ -74,7 +78,9 @@ my_thread_var_t *my_thread_var_find( SV *sv ) {
 		tvl = tvl->prev;
 		tvf = tvf->next;
 	}
+#ifdef SC_DEBUG
 	_debug( "tv 0x%08x NOT found\n", tv );
+#endif
 retf:
 	GLOBAL_UNLOCK();
 	return tvf;
@@ -169,7 +175,15 @@ int Socket_setaddr_INET( tv, host, port, use )
 	}
 	r = getaddrinfo( host, port != NULL ? port : "", &aih, &ail );
 	if( r != 0 ) {
+#ifdef SC_DEBUG
 		_debug( "getaddrinfo() failed %d\n", r );
+#endif
+#ifndef _WIN32
+		{
+			const char *s1 = gai_strerror( r );
+			strncpy( tv->last_error, s1, sizeof( tv->last_error ) );
+		}
+#endif
 		return r;
 	}
 	addr->l = (socklen_t) ail->ai_addrlen;
@@ -217,7 +231,9 @@ int Socket_setaddr_INET( tv, host, port, use )
 		if( host != NULL ) {
 			if( ( host[0] >= '0' && host[0] <= '9' ) || host[0] == ':' ) {
 				if( inet_pton( AF_INET6, host, &in6->sin6_addr ) != 0 ) {
+#ifdef SC_DEBUG
 					_debug( "inet_pton failed %d\n", Socket_errno() );
+#endif
 					goto error;
 				}
 			}
@@ -268,7 +284,9 @@ int Socket_setaddr_BTH(
 	}
 	switch( tv->s_proto ) {
 	case BTPROTO_RFCOMM:
+#ifdef SC_DEBUG
 		_debug( "using BLUETOOTH RFCOMM host %s channel %s\n", host, port );
+#endif
 		addr->l = sizeof( SOCKADDR_RFCOMM );
 		rca = (SOCKADDR_RFCOMM *) addr->a;
 		rca->bt_family = AF_BLUETOOTH;
@@ -280,7 +298,9 @@ int Socket_setaddr_BTH(
 			rca->bt_port = 1;
 		break;
 	case BTPROTO_L2CAP:
+#ifdef SC_DEBUG
 		_debug( "using BLUETOOTH L2CAP host %s psm %s\n", host, port );
+#endif
 		addr->l = sizeof( SOCKADDR_L2CAP );
 		l2a = (SOCKADDR_L2CAP *) addr->a;
 		l2a->bt_family = AF_BLUETOOTH;
@@ -318,7 +338,7 @@ int Socket_domainbyname( const char *name ) {
 	else if( name[0] >= '0' && name[0] <= '9' ) {
 		return atoi( name );
 	}
-	return 0;
+	return AF_UNSPEC;
 }
 
 int Socket_typebyname( const char *name ) {
@@ -408,7 +428,9 @@ int Socket_setblocking( SOCKET s, int value ) {
 	int r;
 	u_long val = (u_long) ! value;
 	r = ioctlsocket( s, FIONBIO, &val );
+#ifdef SC_DEBUG
 	_debug( "ioctlsocket socket %u %d %d\n", s, r, Socket_errno() );
+#endif
 #else
 	DWORD flags;
 	int r;
@@ -417,7 +439,9 @@ int Socket_setblocking( SOCKET s, int value ) {
 		r = fcntl( s, F_SETFL, flags | O_NONBLOCK );
 	else
 		r = fcntl( s, F_SETFL, flags & (~O_NONBLOCK) );
+#ifdef SC_DEBUG
 	_debug( "set blocking %u from %d to %d\n", s, ! (flags & O_NONBLOCK), value );
+#endif
 #endif
 	return r;
 }
@@ -439,12 +463,14 @@ int Socket_write( SV *this, const char *buf, size_t len ) {
 			TV_ERRNOLAST( tv );
 			switch( tv->last_errno ) {
 			case EWOULDBLOCK:
-				// threat not as an error
+				/* threat not as an error */
 				tv->last_errno = 0;
 				r = 0;
 				break;
 			default:
+#ifdef SC_DEBUG
 				_debug( "write error %u\n", tv->last_errno );
+#endif
 				tv->state = SOCK_STATE_ERROR;
 				r = SOCKET_ERROR;
 				break;
@@ -455,7 +481,9 @@ int Socket_write( SV *this, const char *buf, size_t len ) {
 			if( pos > 0 )
 				break;
 			TV_ERRNO( tv, ECONNRESET );
+#ifdef SC_DEBUG
 			_debug( "write error %u\n", tv->last_errno );
+#endif
 			tv->state = SOCK_STATE_ERROR;
 			r = SOCKET_ERROR;
 			goto exit;
@@ -485,7 +513,6 @@ int my_str2ba( const char *str, bdaddr_t *ba ) {
 	const char *ptr = (str != NULL ? str : "00:00:00:00:00:00");
 	int i;
 	for( i = 0; i < 6; i ++ ) {
-		//_debug( "converting %d %s\n", i, ptr );
 		b[5 - i] = (uint8_t) strtol( ptr, NULL, 16 );
 		if( i != 5 && ! (ptr = strchr( ptr, ':' )) )
 			ptr = ":00:00:00:00:00";
@@ -493,19 +520,6 @@ int my_str2ba( const char *str, bdaddr_t *ba ) {
 	}
 	return 0;
 }
-
-DWORD get_current_thread_id() {
-#ifdef SC_THREADS
-#ifdef _WIN32
-	return GetCurrentThreadId();
-#else
-	return (DWORD) pthread_self();
-#endif
-#else
-	return 0;
-#endif
-}
-
 
 char *my_itoa( char *str, long value, int radix ) {
 	static const char HEXTAB[] = {
@@ -528,7 +542,7 @@ char *my_itoa( char *str, long value, int radix ) {
 		break;
 	default:
 		do {
-			*ret ++ = (char) ( ( value % radix ) + '0' );
+			*ret ++ = (char) ((value % radix) + '0');
 			value /= radix;
 		} while( value > 0 );
 		if( neg )
@@ -542,7 +556,7 @@ char *my_itoa( char *str, long value, int radix ) {
 char *my_strncpy( char *dst, const char *src, size_t len ) {
 	register char ch;
 	for( ; len > 0; len -- ) {
-		if( ( ch = *src ++ ) == '\0' ) {
+		if( (ch = *src ++) == '\0' ) {
 			*dst = '\0';
 			return dst;
 		}
@@ -555,7 +569,7 @@ char *my_strncpy( char *dst, const char *src, size_t len ) {
 char *my_strcpy( char *dst, const char *src ) {
 	register char ch;
 	while( 1 ) {
-		if( ( ch = *src ++ ) == '\0' ) {
+		if( (ch = *src ++) == '\0' ) {
 			break;
 		}
 		*dst ++ = ch;
@@ -567,7 +581,7 @@ char *my_strcpy( char *dst, const char *src ) {
 char *my_strncpyu( char *dst, const char *src, size_t len ) {
 	register char ch;
 	for( ; len > 0; len -- ) {
-		if( ( ch = *src ++ ) == '\0' ) {
+		if( (ch = *src ++) == '\0' ) {
 			*dst = '\0';
 			return dst;
 		}
@@ -580,7 +594,7 @@ char *my_strncpyu( char *dst, const char *src, size_t len ) {
 int my_stricmp( const char *cs, const char *ct ) {
 	register signed char res;
 	while( 1 ) {
-		if( ( res = toupper( *cs ) - toupper( *ct ++ ) ) != 0 || ! *cs ++ )
+		if( (res = toupper( *cs ) - toupper( *ct ++ )) != 0 || ! *cs ++ )
 			break;
 	}
 	return res;

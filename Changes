@@ -1,5 +1,13 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.20
+    - added functions "getaddrinfo", "getnameinfo"
+    - added garbage method again. auto destruction should work now
+    - linking to crt on windows is static now
+    - fixed return value of get_hostname() on failure
+    - changed comments in source code for compatibility with
+      the ibm cc_r compiler on aix (thanks to c. keil)
+
 version 1.13
     - bug on windows fixed
     - fixed wrong use of h_addr in hostent structure
@@ -7,8 +15,8 @@ version 1.13
 version 1.12
     - version style changed
     - "new()" now sets correct error code on failure
-    - added "listen" to documentation.. sorry :)
-    - fixed test scripts for darwin
+    - added "listen" to the documentation.. sorry :)
+    - fixed test scripts on darwin
 
 version 1.1.1
     - added cascading to internal resource storage for better performance on
@@ -31,8 +39,8 @@ version 1.0.7
 
 version 1.0.6
     - documentation updated
-    - fixed sockt settings for parameters 'local_path' and 'remote_path'
-      called by new()
+    - fixed socket settings for parameters 'local_path' and 'remote_path'
+      in constructor function new()
 
 version 1.0.5
     - fixed testscript for inet6
@@ -52,7 +60,7 @@ version 1.0.2
 
 version 1.0.1
     - added timeout parameter to connect function
-    - fixed formats of socket option SO_SNDTIMEO and SO_RCVTIMEO on win32
+    - fixed format of socket option SO_SNDTIMEO and SO_RCVTIMEO on win32
     - fixed various test scripts
 
 version 1.0.0

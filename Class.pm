@@ -3,42 +3,43 @@ package Socket::Class;
 # Socket::Class - A class to communicate with sockets
 # Use "perldoc Socket::Class" for documenation
 # =============================================================================
-use Carp ();
 
 # enable for debugging
 #use strict;
 #use warnings;
 #no warnings 'uninitialized';
 
-use vars qw($VERSION);
+our( $VERSION );
 
 BEGIN {
-	$VERSION = '1.13';
+	$VERSION = '1.20';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
 	*sleep = \&wait;
 	*fileno = \&handle;
+	*remote_name = \&get_hostname;
 }
 
 sub import {
 	my $pkg = shift;
 	my $callpkg = caller;
 	@_ or return;
-	require Socket::Class::Const if ! $Socket::Class::Const::VERSION;
+	$Socket::Class::Const::VERSION
+		or require Socket::Class::Const;
 	&Exporter::export( 'Socket::Class::Const', $callpkg, @_ );
 }
 
 sub printf {
 	@_ >= 2
-		or &Carp::croak( 'Usage: ' . __PACKAGE__ . '::printf(this,fmt,...)' );
+		or &Carp::croak( 'Usage: Socket::Class::printf(this,fmt,...)' );
 	my( $sock, $fmt ) = ( shift, shift );
 	return &write( $sock, sprintf( $fmt, @_ ) );
 }
 
 sub reconnect {
 	@_ >= 1 && @_ <= 2
-		or &Carp::croak( 'Usage: ' . __PACKAGE__ . '::reconnect(this,wait=0)' );
+		or &Carp::croak( 'Usage: Socket::Class::reconnect(this,wait=0)' );
 	&close( $_[0] ) or return undef;
 	&wait( $_[0], $_[1] ) if $_[1];
 	&connect( $_[0] ) or return undef;
@@ -62,8 +63,8 @@ Socket::Class - A class to communicate with sockets
 
 Socket::Class provides a simple, fast and efficient way to communicate with
 sockets.
-It operates outside of the PerlIO layer and can be used as a replacement
-of IO::Socket.
+It operates outside of Perl's IO and socket layer. It can be used as a
+B<replacement to IO::Socket>.
 Little parts of Bluetooth technology has been integrated. Please see below.
 
 =head2 Bluetooth
@@ -121,6 +122,8 @@ B<Address Functions>
 
 L<get_hostaddr|Socket::Class/get_hostaddr>,
 L<get_hostname|Socket::Class/get_hostname>,
+L<getaddrinfo|Socket::Class/getaddrinfo>,
+L<getnameinfo|Socket::Class/getnameinfo>,
 L<local_addr|Socket::Class/local_addr>,
 L<local_path|Socket::Class/local_path>,
 L<local_port|Socket::Class/local_port>,
@@ -168,7 +171,7 @@ L<handle|Socket::Class/handle>,
 L<is_readable|Socket::Class/is_readable>,
 L<is_writable|Socket::Class/is_writable>,
 L<select|Socket::Class/select>,
-L<sleep|Socket::Class/sleep>
+L<sleep|Socket::Class/sleep>,
 L<state|Socket::Class/state>,
 L<to_string|Socket::Class/to_string>,
 L<wait|Socket::Class/wait>
@@ -193,7 +196,7 @@ L<is_error|Socket::Class/is_error>
 
   use Socket::Class qw($SOMAXCONN);
   
-  # create a new socket at port 9999 and listen for clients 
+  # create a new socket on port 9999 and listen for clients 
   $server = Socket::Class->new(
        'local_port' => 9999,
        'listen' => $SOMAXCONN,
@@ -245,7 +248,7 @@ L<is_error|Socket::Class/is_error>
   $sock->write(
       "GET / HTTP/1.0\r\n" .
       "User-Agent: Not Mozilla\r\n" .
-      "Host: " . $sock->remote_addr . "\r\n" .
+      "Host: www.perl.org\r\n" .
       "Connection: Close\r\n" .
       "\r\n"
   ) or die $sock->error;
@@ -289,11 +292,13 @@ L<is_error|Socket::Class/is_error>
 
 =over 4
 
-=item new ( [%arg] )
+=item B<new ( [%arg] )>
 
 Creates a Socket::Class object, which is a reference to a newly created socket
 handle. I<new()> optionally takes arguments, these arguments are in key-value
 pairs.
+
+=for formatter none
 
   remote_addr    Remote host address             <hostname> | <hostaddr>
   remote_port    Remote port or service          <service> | <number>
@@ -304,13 +309,16 @@ pairs.
   domain         Socket domain name (or number)  "inet" | "inet6" | ...
   proto          Protocol name (or number)       "tcp" | "udp" | ...
   type           Socket type name (or number)    "stream" | "dgram" | ...
-  listen         Put socket into listen state with a specified maximal number
-                 of connections in the queue
+  listen         Put socket into listen state with a specified maximal
+                 number of connections in the queue
   broadcast      Set SO_BROADCAST before binding
   reuseaddr      Set SO_REUSEADDR before binding
   blocking       Enable or disable blocking mode; default is enabled
-  timeout        Timeout value for various operations as floating point number;
+  timeout        Timeout value for various operations as floating point
+                 number;
                  defaults to 15000 (15 seconds); currently used for connect
+
+=for formatter perl
 
 If I<local_addr>, I<local_port> or I<local_path> is defined then the socket
 will bind a local address. If I<listen> is defined then the socket will put
@@ -344,7 +352,7 @@ I<Connect to smtp service (port 25) on localhost>
 
   $sock = Socket::Class->new(
       'remote_addr' => 'localhost',
-      'remote_addr' => 'smtp',
+      'remote_port' => 'smtp',
   ) or die Socket::Class->error;
 
 I<Create a broadcast socket>
@@ -362,16 +370,13 @@ I<Create a broadcast socket>
 
 =head2 Closing / Destructing / Freeing
 
-In non threaded applications an undef on the reference variable will free
-the socket and its resources.
+Undefining the reference variable will free the socket and its resources.
 
-In threaded applications, socket destruction by undefining the reference
-variable, wont work right anymore and has been disabled. In this case you
-need to call I<free()>.
+You can also call I<free()> to free the socket explicitly.
 
 =over 4
 
-=item shutdown ( [$how] )
+=item B<shutdown ( [$how] )>
 
 Disables sends and receives on the socket.
 
@@ -382,11 +387,15 @@ I<$how>
 One of the following values that specifies the operation that will no longer
 be allowed. Default is $SD_SEND.
 
+=for formatter none
+
   Num   Const         Description
   ----------------------------------------------------------------------
   0     $SD_SEND      Disable sending on the socket.
   1     $SD_RECEIVE   Disable receiving on the socket.
   2     $SD_BOTH      Disable both sending and receiving on the socket.
+
+=for formatter perl
 
 B<Return Values>
 
@@ -406,12 +415,12 @@ B<Examples>
   $sock->free();
 
 
-=item close ()
+=item B<close ()>
 
 Closes the socket without freeing internal resources.
 
 
-=item free ()
+=item B<free ()>
 
 Closes the socket and frees all internally allocated resources.
 
@@ -422,9 +431,9 @@ Closes the socket and frees all internally allocated resources.
 
 =over 4
 
-=item bind ( [$addr [, $port]] )
+=item B<bind ( [$addr [, $port]] )>
 
-=item bind ( [$path] )
+=item B<bind ( [$path] )>
 
 Binds the socket to a specified local address.
 
@@ -459,7 +468,7 @@ B<Examples>
       or die "can't bind: " . $sock->error;
 
 
-=item listen ( [$backlog] )
+=item B<listen ( [$backlog] )>
 
 Listens for a connection on a socket.
 
@@ -487,7 +496,7 @@ B<Examples>
       or die $sock->error;
 
 
-=item accept ()
+=item B<accept ()>
 
 Accepts a connection on a bound socket. Once a successful connection is made,
 a new socket resource is returned, which may be used for communication.
@@ -540,9 +549,9 @@ I<Non blocking mode>
 
 =over 4
 
-=item connect ( [$addr [, $port [, $timeout]]] )
+=item B<connect ( [$addr [, $port [, $timeout]]] )>
 
-=item connect ( [$path [,$timeout]] )
+=item B<connect ( [$path [,$timeout]] )>
 
 Initiates a connection.
 
@@ -582,7 +591,7 @@ B<Examples>
       or die "can't connect: " . $sock->error;
 
 
-=item reconnect ( [$timeout] )
+=item B<reconnect ( [$timeout] )>
 
 Closes the current connection, waits I<$timeout> milliseconds and
 reconnects the socket to the connection previously made.
@@ -613,7 +622,7 @@ B<Examples>
 
 =over 4
 
-=item send ( $buf [, $flags] )
+=item B<send ( $buf [, $flags] )>
 
 Sends data to a connected socket.
 
@@ -627,6 +636,8 @@ I<$flags>
 
 The value of I<$flags> can be any combination of the following: 
 
+=for formatter none
+
   Number  Constant         Description
   -------------------------------------------------------------
   0x1     $MSG_OOB         Process OOB (out-of-band) data  
@@ -634,6 +645,8 @@ The value of I<$flags> can be any combination of the following:
   0x4     $MSG_DONTROUTE   Bypass routing, use direct interface  
   0x8     $MSG_CTRUNC      Data completes record  
   0x100   $MSG_WAITALL     Data completes transaction  
+
+=for formatter perl
 
 
 B<Return Values>
@@ -656,7 +669,7 @@ B<See Also>
 L<Socket::Class::Const|Socket::Class::Const>
 
 
-=item recv ( $buf, $len [, $flags] )
+=item B<recv ( $buf, $len [, $flags] )>
 
 Receives data from a connected socket.
 
@@ -674,15 +687,19 @@ I<$flags>
 
 The value of I<$flags> can be any combination of the following: 
 
+=for formatter none
+
   Number  Constant         Description
-  ---------------------------------------------------------------------------
+  ----------------------------------------------------------------------
   0x1     $MSG_OOB         Process OOB (out-of-band) data  
   0x2     $MSG_PEEK        Peek at incoming message  
   0x4     $MSG_DONTROUTE   Bypass routing, use direct interface  
   0x8     $MSG_CTRUNC      Data completes record
-  0x20    $MSG_TRUNC       Return the real length of the packet, even when it
-                           was longer than the passed buffer.
+  0x20    $MSG_TRUNC       Return the real length of the packet, even
+                           when it was longer than the passed buffer.
                            Only valid for packet sockets. 
+
+=for formatter perl
 
 B<Return Values>
 
@@ -695,7 +712,7 @@ B<See Also>
 L<Socket::Class::Const|Socket::Class::Const>
 
 
-=item sendto ( $buf [, $to [, $flags]] )
+=item B<sendto ( $buf [, $to [, $flags]] )>
 
 Sends a message to a socket, whether it is connected or not.
 
@@ -713,11 +730,15 @@ I<$flags>
 
 The value of I<$flags> can be any combination of the following: 
 
+=for formatter none
+
   Number  Constant         Description
   -------------------------------------------------------------
   0x1     $MSG_OOB         Process OOB (out-of-band) data  
   0x2     $MSG_PEEK        Peek at incoming message  
   0x4     $MSG_DONTROUTE   Bypass routing, use direct interface  
+
+=for formatter perl
 
 B<Return Values>
 
@@ -747,7 +768,7 @@ B<See Also>
 L<Socket::Class::Const|Socket::Class::Const>
 
 
-=item recvfrom ( $buf, $len [, $flags] )
+=item B<recvfrom ( $buf, $len [, $flags] )>
 
 Receives data from a socket whether or not it is connection-oriented
 
@@ -766,16 +787,20 @@ I<$flags>
 The following table contains the different flags that can be set using the
 I<$flags> parameter. Use the OR logic operator (|) to use more than one flag.
 
+=for formatter none
+
   Number  Constant         Description
-  ---------------------------------------------------------------------------
+  -----------------------------------------------------------------------
   0x1     $MSG_OOB         Process OOB (out-of-band) data  
-  0x2     $MSG_PEEK        Receive data from the beginning of the receive queue
-                           without removing it from the queue.
-  0x40    $MSG_DONTWAIT    With this flag set, the function returns even if it
-                           would normally have blocked. 
+  0x2     $MSG_PEEK        Receive data from the beginning of the receive
+                           queue without removing it from the queue.
+  0x40    $MSG_DONTWAIT    With this flag set, the function returns even
+                           if it would normally have blocked. 
   0x100   $MSG_WAITALL     Block until at least len are received. However,
                            if a signal is caught or the remote host
                            disconnects, the function may return less data.
+
+=for formatter perl
 
 B<Return Values>
 
@@ -821,7 +846,7 @@ L<Socket::Class::Const|Socket::Class::Const>
 
 =over 4
 
-=item write ( $buffer [, $length] )
+=item B<write ( $buffer [, $length] )>
 
 Writes to the socket from the given buffer.
 
@@ -853,7 +878,7 @@ to watch out so you don't unintentionally forget to transmit the rest of
 your data. 
 
 
-=item read ( $buffer, $length )
+=item B<read ( $buffer, $length )>
 
 Reads a maximum of length bytes from a socket.
 
@@ -874,7 +899,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item print ( ... )
+=item B<print ( ... )>
 
 Writes to the socket from the given parameters. I<print> maps to I<write>
 
@@ -890,7 +915,7 @@ B<Examples>
   $sock->print( 'hello client', "\n" );
 
 
-=item printf ( $fmt, ... )
+=item B<printf ( $fmt, ... )>
 
 Writes formated string to the socket.
 
@@ -917,9 +942,9 @@ B<Examples>
   $sock->write( sprintf( "%.3f", $number ) );
 
 
-=item say ( ... )
+=item B<say ( ... )>
 
-=item writeline ( ... )
+=item B<writeline ( ... )>
 
 Writes to the socket from the given string plus a newline char (\n).
 I<writeline> is a synonym for I<say>.
@@ -936,7 +961,7 @@ B<Examples>
   $sock->say( 'hello client' );
 
 
-=item readline ()
+=item B<readline ()>
 
 Reads characters from the socket and stops at \n or \r\n.
 
@@ -953,7 +978,7 @@ and the error string can be retrieved with L<error()|Socket::Class/error>.
 
 =over 4
 
-=item set_blocking ( [$int] )
+=item B<set_blocking ( [$int] )>
 
 Sets blocking mode on the socket.
 
@@ -970,7 +995,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item get_blocking ()
+=item B<get_blocking ()>
 
 Returns the current blocking state.
 
@@ -982,7 +1007,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item set_reuseaddr ( [$int] )
+=item B<set_reuseaddr ( [$int] )>
 
 Sets the SO_REUSEADDR socket option.
 
@@ -999,7 +1024,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item get_reuseaddr ()
+=item B<get_reuseaddr ()>
 
 Returns the current value of SO_REUSEADDR.
 
@@ -1010,7 +1035,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item set_broadcast ( [$int] )
+=item B<set_broadcast ( [$int] )>
 
 Sets the SO_BROADCAST socket option.
 
@@ -1027,7 +1052,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item get_broadcast ()
+=item B<get_broadcast ()>
 
 Returns the current value of SO_BROADCAST.
 
@@ -1038,7 +1063,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item set_rcvbuf_size ( [$size] )
+=item B<set_rcvbuf_size ( [$size] )>
 
 Sets the SO_RCVBUF socket option.
 
@@ -1055,7 +1080,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item get_rcvbuf_size ()
+=item B<get_rcvbuf_size ()>
 
 Returns the current value of SO_RCVBUF.
 
@@ -1066,7 +1091,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item set_sndbuf_size ( [$size] )
+=item B<set_sndbuf_size ( [$size] )>
 
 Sets the SO_SNDBUF socket option.
 
@@ -1083,7 +1108,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item get_sndbuf_size ()
+=item B<get_sndbuf_size ()>
 
 Returns the current value of SO_SNDBUF.
 
@@ -1094,7 +1119,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item set_timeout ( [$ms] )
+=item B<set_timeout ( [$ms] )>
 
 Sets the timeout for various operations.
 
@@ -1111,7 +1136,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item get_timeout ()
+=item B<get_timeout ()>
 
 Returns the current timeout.
 
@@ -1122,7 +1147,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item set_tcp_nodelay ( [$int] )
+=item B<set_tcp_nodelay ( [$int] )>
 
 Sets the TCP_NODELAY socket option.
 
@@ -1139,7 +1164,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item get_tcp_nodelay ()
+=item B<get_tcp_nodelay ()>
 
 Returns the current value of TCP_NODELAY.
 
@@ -1150,7 +1175,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item set_option ( $level, $optname, $optval, ... )
+=item B<set_option ( $level, $optname, $optval, ... )>
 
 Sets socket options for the socket.
 
@@ -1201,7 +1226,7 @@ B<See Also>
 L<Socket::Class::Const|Socket::Class::Const>
 
 
-=item get_option ( $level, $optname )
+=item B<get_option ( $level, $optname )>
 
 Gets socket options for the socket.
 
@@ -1218,35 +1243,41 @@ I<$optname>
 
 A valid socket option. 
 
+=for formatter none
+
   Option             Description
-  -----------------------------------------------------------------------------
-  $SO_DEBUG          Reports whether debugging information is being recorded.  
+  -----------------------------------------------------------------------
+  $SO_DEBUG          Reports whether debugging information is being
+                     recorded.  
   $SO_ACCEPTCONN     Reports whether socket listening is enabled.  
-  $SO_BROADCAST      Reports whether transmission of broadcast messages is
-                     supported.  
+  $SO_BROADCAST      Reports whether transmission of broadcast messages
+                     is supported.  
   $SO_REUSEADDR      Reports whether local addresses can be reused.  
-  $SO_KEEPALIVE      Reports whether connections are kept active with periodic
-                     transmission of messages. If the connected socket fails to
-                     respond to these messages, the connection is broken and
-                     processes writing to that socket are notified with a
-                     SIGPIPE signal.  
+  $SO_KEEPALIVE      Reports whether connections are kept active with
+                     periodic transmission of messages. If the connected
+                     socket fails to respond to these messages, the
+                     connection is broken and processes writing to that
+                     socket are notified with a SIGPIPE signal.  
   $SO_LINGER         Reports whether the socket lingers on close()
                      if data is present.  
-  $SO_OOBINLINE      Reports whether the socket leaves out-of-band data inline.  
+  $SO_OOBINLINE      Reports whether the socket leaves out-of-band data
+                     inline.  
   $SO_SNDBUF         Reports send buffer size information.  
   $SO_RCVBUF         Reports recieve buffer size information.  
   $SO_ERROR          Reports information about error status and clears it.  
   $SO_TYPE           Reports the socket type.  
   $SO_DONTROUTE      Reports whether outgoing messages bypass the standard
                      routing facilities.  
-  $SO_RCVLOWAT       Reports the minimum number of bytes to process for socket
-                     input operations. ( Defaults to 1 )  
+  $SO_RCVLOWAT       Reports the minimum number of bytes to process for
+                     socket input operations. ( Defaults to 1 )  
   $SO_RCVTIMEO       Reports the timeout value for input operations.  
-  $SO_SNDLOWAT       Reports the minimum number of bytes to process for socket
-                     output operations.  
-  $SO_SNDTIMEO       Reports the timeout value specifying the amount of time
-                     that an output function blocks because flow control
-                     prevents data from being sent.  
+  $SO_SNDLOWAT       Reports the minimum number of bytes to process for
+                     socket output operations.  
+  $SO_SNDTIMEO       Reports the timeout value specifying the amount of
+                     time that an output function blocks because flow
+                     control prevents data from being sent.  
+
+=for formatter perl
 
 B<Return Values>
 
@@ -1284,37 +1315,37 @@ L<Socket::Class::Const|Socket::Class::Const>
 
 =over 4
 
-=item local_addr ()
+=item B<local_addr ()>
 
 Returns the local adress of the socket
 
 
-=item local_port ()
+=item B<local_port ()>
 
 Returns the local port of the socket
 
 
-=item local_path ()
+=item B<local_path ()>
 
 Returns the local path of 'unix' family sockets
 
 
-=item remote_addr ()
+=item B<remote_addr ()>
 
 Returns the remote adress of the socket
 
 
-=item remote_port ()
+=item B<remote_port ()>
 
 Returns the remote port of the socket
 
 
-=item remote_path ()
+=item B<remote_path ()>
 
 Returns the remote path of 'unix' family sockets
 
 
-=item pack_addr ( $addr [, $port] )
+=item B<pack_addr ( $addr [, $port] )>
 
 Packs a given address and returns it.
 
@@ -1338,7 +1369,7 @@ B<Examples>
   ( $addr, $port ) = $sock->unpack_addr( $paddr );
 
 
-=item unpack_addr ( $paddr )
+=item B<unpack_addr ( $paddr )>
 
 Unpacks a given address and returns it.
 
@@ -1358,15 +1389,21 @@ B<Examples>
   ( $addr, $port ) = $sock->unpack_addr( $paddr );
 
 
-=item get_hostname ( $addr )
+=item B<get_hostname ()>
 
-Resolves the name of a given host address.
+=item B<get_hostname ( $addr )>
+
+=item B<remote_name ()>
+
+Resolves the name of a given host address. I<remote_name> is a synonym for
+I<get_hostname>.
 
 B<Parameters>
 
 I<$addr>
 
 The host address in plain (e.g. '192.168.0.1') or packed format.
+If no address is specified the remote address of the socket is used.
 
 B<Return Values>
 
@@ -1382,9 +1419,15 @@ B<Examples>
   
   $paddr = $sock->pack_addr( '127.0.0.1', 9999 );
   $str = $sock->get_hostname( $paddr );
+  
+  # -or-
+  
+  $sock->connect( 'www.perl.org', 'http' )
+      or die $sock->error;
+  print "conntected to ", $sock->remote_name || $sock->remote_addr, "\n";
 
 
-=item get_hostaddr ( $name )
+=item B<get_hostaddr ( $name )>
 
 Resolves the address of a given host name.
 
@@ -1407,13 +1450,158 @@ B<Examples>
   print "address of $host is $addr\n";
 
 
+=item B<getaddrinfo
+	( $node [, $service [, $family [, $proto [, $type [, $flags]]]]] )>
+
+The getaddrinfo function provides protocol-independent translation from a
+host name to an address.
+The function can be exported.
+
+B<Parameters>
+
+I<$node>
+
+A string that contains a host (node) name or a numeric host address string.
+For the Internet protocol, the numeric host address string is a
+dotted-decimal IPv4 address or an IPv6 hex address.
+
+I<$service>
+
+A service name or port number.
+
+I<$family>
+
+The address family as name or number.
+
+I<$proto>
+
+The protocol type as name or number.
+
+I<$type>
+
+The socket type as name or number.
+
+I<$flags>
+
+Flags that indicate options used.
+See also L<getaddrinfo() flags|Socket::Class::Const/getaddrinfo___flags>
+in L<Socket::Class::Const|Socket::Class::Const>
+
+B<Return Values>
+
+Returns an array of hashes with address information, or undef on error.
+The error code can be retrieved with L<errno()|Socket::Class/errno>
+and the error string can be retrieved with L<error()|Socket::Class/error>. 
+
+Address information structure:
+
+=for formatter none
+
+  'family'         => address family as number
+  'socktype'       => socket type as number
+  'protocol'       => protocol type as number
+  'paddr'          => address in packed format
+  'canonname'      => [opt] canonical name for the host
+  'familyname'     => [opt] name of address family (eg. 'INET')
+  'sockname'       => [opt] name of socket type (eg. 'STREAM')
+  'protocolname'   => [opt] name of protocol type (eg. 'TCP')
+  'addr'           => [opt] readable version of IP v4/6 address
+  'port'           => [opt] readable version of IP v4/6 port
+
+=for formatter perl
+
+
+B<Examples>
+
+I<getaddrinfo()> as global function
+
+  @list = Socket::Class->getaddrinfo( 'localhost' )
+      or die Socket::Class->error;
+
+
+I<getaddrinfo()> from object
+
+  $sock = Socket::Class->new();
+  @list = $sock->getaddrinfo( 'localhost' )
+      or die $sock->error;
+
+
+I<getaddrinfo()> exported
+
+  use Socket::Class qw(&getaddrinfo);
+  
+  @list = &getaddrinfo( 'localhost' )
+      or die $!;
+
+
+=item B<getnameinfo ( $addr [, $service [, $flags]] )>
+
+=item B<getnameinfo ( $paddr [, $flags] )>
+
+The getnameinfo function provides protocol-independent name resolution from
+an address to a host name and from a port number to the service name.
+The function can be exported.
+
+B<Parameters>
+
+I<$addr>
+
+The host address in plain (e.g. '192.168.0.1') format.
+
+I<$service>
+
+A service name or port number.
+
+I<$paddr>
+
+A packed host address. See also C<pack_addr()>, C<getaddrinfo()>
+
+I<$flags>
+
+A value used to customize processing of the I<getnameinfo> function.
+See also L<getnameinfo() flags|Socket::Class::Const/getnameinfo___flags>
+in L<Socket::Class::Const|Socket::Class::Const>
+
+B<Return Values>
+
+Returns the hostname in scalar context, or hostname and service in array
+context, or undef on error. 
+The error code can be retrieved with L<errno()|Socket::Class/errno>
+and the error string can be retrieved with L<error()|Socket::Class/error>. 
+
+B<Examples>
+
+I<getnameinfo()> as global function
+
+  ($host, $service) = Socket::Class->getnameinfo( '127.0.0.1', 80 )
+      or die Socket::Class->error;
+  print "host: $host, service: $service\n";
+
+
+I<getnameinfo()> from object
+
+  $sock = Socket::Class->new();
+  ($host, $service) = $sock->getnameinfo( '127.0.0.1', 80 )
+      or die $sock->error;
+  print "host: $host, service: $service\n";
+
+
+I<getnameinfo()> exported
+
+  use Socket::Class qw(&getnameinfo);
+  
+  ($host, $service) = &getnameinfo( '127.0.0.1', 80 )
+      or die $!;
+  print "host: $host, service: $service\n";
+
+
 =back
 
 =head2 Miscellaneous Functions
 
 =over 4
 
-=item is_readable ( [$timeout] )
+=item B<is_readable ( [$timeout] )>
 
 Does a read select on the socket and returns the result.
 
@@ -1433,7 +1621,7 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item is_writable ( [$timeout] )
+=item B<is_writable ( [$timeout] )>
 
 Does a write select on the socket and returns the result.
 
@@ -1453,25 +1641,25 @@ The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
 
-=item select ( [$read [, $write [, $except [, $timeout]]]] )
+=item B<select ( [$read [, $write [, $except [, $timeout]]]] )>
 
 Runs the I<select()> system call on the socket with a specified timeout.
 
 B<Parameters>
 
-I<$read> [in/out]
+I<$read> - [in/out]
 
 If the I<$read> parameter is set, the socket will be watched to see if
 characters become available for reading.
 Out: Indicates the state of readability.
 
-I<$write> [in/out]
+I<$write> - [in/out]
 
 If the I<$write> parameter is set, the socket will be watched to see if
 a write will not block.
 Out: Indicates the state of writability.
 
-I<$except> [in/out]
+I<$except> - [in/out]
 
 If the I<$except> parameter is set, the socket will be watched for
 exceptions.
@@ -1544,7 +1732,11 @@ OOB data is available for reading (only if SO_OOBINLINE is disabled).
 
 B<Examples>
 
-  # watch all states and return within 1 second
+  use Socket::Class qw($SOL_SOCKET $SO_ERROR);
+  
+  ...
+  
+  # watch all states and return within 1000 milliseconds
   $v = $sock->select( $r = 1, $w = 1, $e = 1, 1000 );
   if( ! defined $v ) {
       die $sock->error;
@@ -1563,11 +1755,13 @@ B<Examples>
       ...
   }
 
-=item state ()
+=item B<state ()>
 
 Returns the state of the socket.
 
 B<Return Values>
+
+=for formatter none
 
   Number   Constant         Description
   ---------------------------------------------------
@@ -1578,22 +1772,24 @@ B<Return Values>
   4        $SOS_CLOSED      Socket is closed
   99       $SOS_ERROR       Socket got an error on last send or receive
 
+=for formatter perl
 
-=item to_string ()
+
+=item B<to_string ()>
 
 Returns a readable version of the socket.
 
 
-=item handle ()
+=item B<handle ()>
 
-=item fileno ()
+=item B<fileno ()>
 
 Returns the internal socket handle. I<fileno> is a synonym for I<handle>.
 
 
-=item wait ( $ms )
+=item B<wait ( $ms )>
 
-=item sleep ( $ms )
+=item B<sleep ( $ms )>
 
 Sleeps the given number of milliseconds. I<sleep> is a synonym for I<wait>.
 
@@ -1610,18 +1806,18 @@ The number of milliseconds to sleep.
 
 =over 4
 
-=item is_error ()
+=item B<is_error ()>
 
 Indicates a socket error. Returns a true value on socket state SOS_ERROR, or a
 false value on other states.
 
 
-=item errno ()
+=item B<errno ()>
 
 Returns the last error code.
 
 
-=item error ( [code] )
+=item B<error ( [code] )>
 
 Returns the error message of the error code provided by I<$code> parameter, or
 from the last occurred error.
@@ -1630,7 +1826,7 @@ from the last occurred error.
 
 =head1 MORE EXAMPLES
 
-=head2 Internet Server using Threads
+=head2 Internet Server using threads
 
   use threads;
   use threads::shared;
@@ -1725,7 +1921,7 @@ from the last occurred error.
 
 =head1 AUTHORS
 
-Christian Mueller <christian_at_hbr1.com>
+Written and currently maintained by Christian Mueller
 
 =head1 COPYRIGHT
 

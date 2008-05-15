@@ -9,26 +9,37 @@ my %os_supported = (
 if( ! $os_supported{$^O} ) {
 print <<EOF1;
 ************* WARNING *************
-* Your operation system has not   *
+* Your operation system has NOT   *
 * been tested.                    *
-* The installation may fail!      *
 ***********************************
 EOF1
 }
 
 $Verbose = 0;
 
+foreach( @ARGV ) {
+	$_ = lc( $_ );
+	if( index( $_, '--debug' ) == 0 ) {
+		if( m/--debug=(\d+)/ ) {
+			$_DEBUG = $1;
+		}
+		else {
+			$_DEBUG = 1;
+		}
+	}
+}
+
 %_MAKEOPTS = (
     NAME => 'Socket::Class',
     VERSION_FROM => 'Class.pm', # finds $VERSION
     LIBS => [], # e.g., '-lm'
     DEFINE => '', # e.g., '-DHAVE_SOMETHING'
-    INC => '-I../../../', # e.g., '-I. -I/usr/include/other'
+    INC => '', # e.g., '-I. -I/usr/include/other'
     XSPROTOARG => '-noprototypes',
     PREREQ_PM => {
     },
     OBJECT => '$(O_FILES)',
-    XS => { 'Class.xs' => 'Class.c' },
+    XS => {'Class.xs' => 'Class.c'},
     C => ['socket_class.c', 'Class.c'],
     H => ['socket_class.h'],
     DIR => [],
@@ -37,8 +48,12 @@ $Verbose = 0;
 if( $Config{'usethreads'} ) {
 	$_MAKEOPTS{'DEFINE'} .= ' -DSC_THREADS';
 }
+if( $_DEBUG ) {
+	print "enable debug messages\n";
+	$_MAKEOPTS{'DEFINE'} .= ' -DSC_DEBUG=' . $_DEBUG;
+}
 if( $^O eq 'MSWin32' ) {
-	$_MAKEOPTS{'DEFINE'} .= ' -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS -D_MT';
+	$_MAKEOPTS{'DEFINE'} .= ' -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS';
 }
 elsif( $^O eq 'cygwin' ) {
 	push @{$_MAKEOPTS{'LIBS'}}, '-L/lib/w32api -lole32 -lversion -lws2_32';
@@ -54,7 +69,7 @@ if( $^O eq 'MSWin32' ) {
 	}
 }
 else {
-	@_IP = qw(/usr/local/include /usr/include);
+	@_IP = qw(/usr/local/include /usr/include /opt/include);
 	$r = find_header_item( \@_IP, 'netdb.h', 'getaddrinfo' );
 	$r += find_header_item( \@_IP, 'netdb.h', 'freeaddrinfo' );
 	$r += find_header_item( \@_IP, 'netdb.h', 'getnameinfo' );
@@ -98,9 +113,7 @@ sub find_header_item {
 		close $fh;
 		foreach( @ct ) {
 			if( m!^\#include\s+[\<\"]([\w\.\_\/\\]+?\.h\w*)[\"\>]! ) {
-			#if( m!^\#include! ) {
 				next if $reflist->{$1};
-				#print "include $1\n";
 				return 1 if find_header_item( $inc, $1, $item, $level + 1, $reflist );
 			}
 			if( index( $_, $item ) >= 0 ) {
@@ -111,4 +124,25 @@ sub find_header_item {
 	}
 	$level or print "NOT found\n";
 	return 0;
+}
+
+package MY;
+
+sub cflags {
+    my $inherited = shift->SUPER::cflags( @_ );
+    if( $^O eq 'MSWin32' ) {
+	    $inherited =~ s/-O1/-O2/sg;
+    	# set static linking to crt
+	    $inherited =~ s/-MD/-MT/sg;
+	}
+    $inherited;
+}
+
+sub const_loadlibs {
+    my $inherited = shift->SUPER::const_loadlibs( @_ );
+    if( $^O eq 'MSWin32' ) {
+    	# set static linking to crt
+	    $inherited =~ s/msvcrt\.lib/libcmt\.lib/sgi;
+	}
+    $inherited;
 }

@@ -106,9 +106,9 @@ sub client_thread {
 			next;
 		}
 		$client_count ++;
-		if( ( $client_count % 100 ) == 0 ) {
-			my $ac = sprintf( '%0.1f', $client_count / ( &microtime() - $client_ts ) );
-			print "$tid got $client_count packets a $got bytes $ac p/s\n";
+		if( ($client_count % 100) == 0 ) {
+			my $ac = sprintf( '%0.1f', $client_count / (&microtime() - $client_ts) );
+			print "$tid got $client_count packets a $got bytes ($ac p/s)\n";
 		}
 		$sock->write( "S" x 512 );
 	}

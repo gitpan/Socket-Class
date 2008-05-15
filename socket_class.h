@@ -1,18 +1,16 @@
-#ifndef __INCLUDE_SOCKET_CLASS_H__
-#define __INCLUDE_SOCKET_CLASS_H__ 1
+#ifndef __SOCKET_CLASS_H__
+#define __SOCKET_CLASS_H__ 1
 
 #include <EXTERN.h>
 #include <perl.h>
 #undef USE_SOCKETS_AS_HANDLES
 #include <XSUB.h>
 
-// removing from perl
 #undef free
 #undef malloc
 #undef realloc
 #undef memcpy
 #undef calloc
-// removed from perl
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -20,12 +18,18 @@
 #include <math.h>
 
 #ifdef _WIN32
+
 #include <initguid.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <tchar.h>
 #include <io.h>
-#else // posix
+/*
+#include <af_irda.h>
+*/
+
+#else
+
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -35,6 +39,7 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+
 #endif
 
 #ifdef SC_USE_BLUEZ
@@ -44,25 +49,14 @@
 #endif
 
 #ifdef SC_USE_WS2BTH
-//#undef NTDDI_VERSION
-//#define NTDDI_VERSION NTDDI_WINXPSP2
 #include <ws2bth.h>
 #endif
 
 #define __PACKAGE__ "Socket::Class"
 
-//#define SC_DEBUG 1
 #ifdef SC_DEBUG
 int my_debug( const char *fmt, ... );
-#if SC_DEBUG > 1
-#define _tdebug my_debug
-#else
-#define _tdebug
-#endif
 #define _debug my_debug
-#else
-#define _debug
-#define _tdebug
 #endif
 
 #ifdef _WIN32
@@ -100,7 +94,7 @@ typedef unsigned short			sa_family_t;
 typedef unsigned long			u_long;
 #endif
 
-// removing from perlio
+/* removing from perlio */
 #undef htonl
 #undef htons
 #undef ntohl
@@ -146,9 +140,8 @@ typedef unsigned long			u_long;
 #undef socketpair
 #undef open
 #undef close
-// removed from perlio
 
-// removing from perl
+/* removing from perl */
 #undef Newx
 #define Newx(v,c,t) \
 	( (v) = ( (t*) malloc( (c) * sizeof(t) ) ) )
@@ -164,9 +157,8 @@ typedef unsigned long			u_long;
 #undef Copy
 #define Copy(s,d,n,t) \
 	( memcpy( (char*)(d), (const char*)(s), (n) * sizeof(t) ) )
-// removed from perl
 
-#ifdef _WIN32 // win32
+#ifdef _WIN32
 
 #define EWOULDBLOCK				WSAEWOULDBLOCK
 #define ECONNRESET				WSAECONNRESET
@@ -178,11 +170,11 @@ typedef unsigned long			u_long;
 #endif
 
 struct sockaddr_un {
-	sa_family_t					sun_family;				// AF_UNIX
-	char						sun_path[108];			// pathname
+	sa_family_t					sun_family;				/* AF_UNIX */
+	char						sun_path[108];			/* pathname */
 };
 
-#else // posix
+#else
 
 #define SOCKET					int
 #define SOCKET_ERROR			-1
@@ -194,27 +186,36 @@ struct sockaddr_un {
 #endif
 
 #ifndef AF_INET6
-#define SC_OLDNET 1
+#define SC_OLDNET				1
 #define AF_INET6				23
 struct in6_addr {
-	uint8_t 	  s6_addr[16];
+	uint8_t						s6_addr[16];
 };
 struct sockaddr_in6 {
-	sa_family_t	  sin6_family;		/* AF_INET6 */
-	in_port_t	  sin6_port;		/* Port number. */
-	uint32_t	  sin6_flowinfo;	/* Traffic class and flow inf. */
-	struct in6_addr sin6_addr;		/* IPv6 address. */
-	uint32_t	  sin6_scope_id;	/* Set of interfaces for a scope. */
+	sa_family_t					sin6_family;		/* AF_INET6 */
+	in_port_t					sin6_port;		/* Port number. */
+	uint32_t					sin6_flowinfo;	/* Traffic class and flow inf. */
+	struct in6_addr				sin6_addr;		/* IPv6 address. */
+	uint32_t					sin6_scope_id;	/* Set of interfaces for a scope. */
 };
 #endif
 
-#endif // posix
+#endif
 
 #ifndef NI_MAXHOST
 #define NI_MAXHOST				1025
 #endif
 #ifndef NI_MAXSERV
 #define NI_MAXSERV				32
+#endif
+#ifndef SOCK_RDM
+#define SOCK_RDM				4
+#endif
+#ifndef SOCK_SEQPACKET
+#define SOCK_SEQPACKET			5
+#endif
+#ifndef AF_IRDA
+#define AF_IRDA					26
 #endif
 
 #undef MAX
@@ -260,16 +261,16 @@ typedef struct st_bdaddr {
 #include <pshpack1.h>
 struct st_sockaddr_bt {
     sa_family_t		bt_family;
-    bdaddr_t		bt_bdaddr;		// Bluetooth device address
-    GUID			bt_classid; 	// [OPTIONAL] system will query SDP for port
-    ULONG			bt_port;		// RFCOMM channel or L2CAP PSM
+    bdaddr_t		bt_bdaddr;		/* Bluetooth device address */
+    GUID			bt_classid; 	/* [OPTIONAL] system will query SDP for port */
+    ULONG			bt_port;		/* RFCOMM channel or L2CAP PSM */
 } sockaddr_bt_t;
 #include <poppack.h>
 
 typedef struct st_sockaddr_bt			SOCKADDR_RFCOMM;
 typedef struct st_sockaddr_bt			SOCKADDR_L2CAP;
 
-#else // posix
+#else
 
 struct st_sockaddr_rc {
 	sa_family_t			bt_family;
@@ -284,7 +285,7 @@ struct st_sockaddr_l2 {
 typedef struct st_sockaddr_rc	SOCKADDR_RFCOMM;
 typedef struct st_sockaddr_l2	SOCKADDR_L2CAP;
 
-#endif // posix
+#endif
 
 #define SOCKADDR_SIZE_MAX		128
 
@@ -308,7 +309,7 @@ typedef struct st_my_thread_var {
 	BYTE						non_blocking;
 	struct timeval				timeout;
 	char						*classname;
-	DWORD						tid;
+	int							refcnt;
 	long						last_errno;
 	char						last_error[256];
 #ifdef SC_THREADS
@@ -332,30 +333,20 @@ typedef struct st_my_global {
 extern my_global_t global;
 
 #ifdef SC_THREADS
-#define GLOBAL_LOCK() \
-	_tdebug( "global lock called at %s line %d\n", __FILE__, __LINE__ ); \
-	MUTEX_LOCK( &global.thread_lock )
-#define GLOBAL_UNLOCK() \
-	_tdebug( "global unlock called at %s line %d\n", __FILE__, __LINE__ ); \
-	MUTEX_UNLOCK( &global.thread_lock )
-#define TV_LOCK(tv) \
-	_tdebug( "tv lock 0x%08X called at %s line %d\n", tv, __FILE__, __LINE__ ); \
-	MUTEX_LOCK( &tv->thread_lock )
-#define TV_UNLOCK(tv) \
-	_tdebug( "tv unlock 0x%08X called at %s line %d\n", tv, __FILE__, __LINE__ ); \
-	MUTEX_UNLOCK( &tv->thread_lock )
-#define TV_UNLOCK_SAFE(tv) \
-	if( tv != NULL ) { \
-		_tdebug( "tv unlock 0x%08X called at %s line %d\n", tv, __FILE__, __LINE__ ); \
-		MUTEX_UNLOCK( &tv->thread_lock ); \
-	}
-#else // no threads
+
+#define GLOBAL_LOCK()			MUTEX_LOCK( &global.thread_lock )
+#define GLOBAL_UNLOCK()			MUTEX_UNLOCK( &global.thread_lock )
+#define TV_LOCK(tv)				MUTEX_LOCK( &tv->thread_lock )
+#define TV_UNLOCK(tv)			MUTEX_UNLOCK( &tv->thread_lock )
+
+#else
+
 #define GLOBAL_LOCK()
 #define GLOBAL_UNLOCK()
 #define TV_LOCK(tv)
 #define TV_UNLOCK(tv)
-#define TV_UNLOCK_SAFE(tv)		{}
-#endif // threads
+
+#endif
 
 #define TV_ERRNOLAST(tv) \
 	(tv)->last_error[0] = '\0'; \
@@ -369,12 +360,31 @@ extern my_global_t global;
 	my_strncpy( (tv)->last_error, str, sizeof( (tv)->last_error ) ); \
 	(tv)->last_errno = -1
 
+#define GLOBAL_ERROR(code,str) { \
+	SV *__sv = get_sv( "!", TRUE ); \
+	global.last_errno = code; \
+	strncpy( global.last_error, str, sizeof(global.last_error) ); \
+	sv_setiv( __sv, (IV) code ); \
+	sv_setpv( __sv, global.last_error ); \
+	SvIOK_on( __sv ); \
+}
+
+#define GLOBAL_ERRNO(code) { \
+	SV *__sv = get_sv( "!", TRUE ); \
+	char __s[255]; \
+	global.last_errno = code; \
+	Socket_error( __s, sizeof(__s), code ); \
+	sv_setiv( __sv, (IV) code ); \
+	sv_setpv( __sv, __s ); \
+	SvIOK_on( __sv ); \
+}
+
+#define GLOBAL_ERRNOLAST()	GLOBAL_ERRNO(Socket_errno())
+
 void my_thread_var_add( my_thread_var_t *tv );
 void my_thread_var_rem( my_thread_var_t *tv );
 void my_thread_var_free( my_thread_var_t *tv );
 my_thread_var_t *my_thread_var_find( SV *sv );
-
-DWORD get_current_thread_id();
 
 char *my_itoa( char *str, long value, int radix );
 char *my_strncpy( char *dst, const char *src, size_t len );
@@ -382,25 +392,27 @@ char *my_strcpy( char *dst, const char *src );
 char *my_strncpyu( char *dst, const char *src, size_t len );
 int my_stricmp( const char *cs, const char *ct );
 
-#ifdef _WIN32 // win32
+#ifdef _WIN32
 
 #define Socket_close(s) \
 	if( (s) != INVALID_SOCKET ) { \
 		closesocket( (s) ); (s) = (SOCKET) INVALID_SOCKET; \
 	}
+
 #define Socket_errno()            WSAGetLastError()
 
 int inet_aton( const char *cp, struct in_addr *inp );
 
-#else // posix
+#else
 
 #define Socket_close(s) \
 	if( (s) != INVALID_SOCKET ) { \
 		close( (s) ); (s) = (SOCKET) INVALID_SOCKET; \
 	}
+
 #define Socket_errno()            errno
 
-#endif // posix
+#endif
 
 void Socket_setaddr_UNIX( my_sockaddr_t *addr, const char *path );
 int Socket_setaddr_INET(
@@ -419,12 +431,12 @@ int Socket_write( SV *this, const char *buf, size_t len );
 void Socket_error( char *str, DWORD len, long num );
 
 #define IPPORT4(ip,port) \
-	( (ip) >> 0 ) & 0xFF, ( (ip) >> 8 ) & 0xFF, ( (ip) >> 16 ) & 0xFF \
-		, ( (ip) >> 24 ) & 0xFF, ntohs( (port) )
+	((ip) >> 0) & 0xFF, ((ip) >> 8) & 0xFF, ((ip) >> 16) & 0xFF \
+		, ((ip) >> 24) & 0xFF, ntohs( (port) )
 
 #define IP4(ip) \
-	( (ip) >> 0 ) & 0xFF, ( (ip) >> 8 ) & 0xFF, ( (ip) >> 16 ) & 0xFF \
-		, ( (ip) >> 24 ) & 0xFF
+	((ip) >> 0) & 0xFF, ((ip) >> 8) & 0xFF, ((ip) >> 16) & 0xFF \
+		, ((ip) >> 24) & 0xFF
 
 #define IPPORT6(in6,port) \
 	(in6)[0], (in6)[1], (in6)[2], (in6)[3], (in6)[4], (in6)[5], \

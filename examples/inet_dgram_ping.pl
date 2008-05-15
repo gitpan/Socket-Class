@@ -28,7 +28,7 @@ $pingcount = 0;
 $pingtime = 0;
 
 while( 1 ) {
-	$r = $client->sendto( "PING " . microtime(), $paddr );
+	$r = $client->sendto( 'PING ' . microtime(), $paddr );
 	if( ! defined $r ) {
 		warn $client->error;
 		last;
@@ -43,13 +43,13 @@ while( 1 ) {
 		$client->wait( 1 );
 		next;
 	}
-	( $cmd, $arg ) = $buf =~ m/^(\w+)\s+(.*)/;
+	($cmd, $arg) = $buf =~ m/^(\w+)\s+(.*)/;
 	if( $cmd eq 'RPING' ) {
 		$pingcount ++;
-		$pingtime += ( &microtime() - $arg );
+		$pingtime += (&microtime() - $arg);
 	}
-	if( ( $pingcount % 100 ) == 0 ) {
-		$apt = sprintf( '%0.3f', ( $pingtime / $pingcount ) * 1000 );
+	if( ($pingcount % 100) == 0 ) {
+		$apt = sprintf( '%0.3f', ($pingtime / $pingcount) * 1000 );
 		say "average ping time $apt ms";
 	}
 }
@@ -76,10 +76,10 @@ sub server_thread {
 			$sock->wait( 1 );
 			next;
 		}
-		( $ra, $rp ) = $sock->unpack_addr( $caddr );
-		( $cmd, $arg ) = $buf =~ m/^(\w+)\s+(.*)/;
+		($ra, $rp) = $sock->unpack_addr( $caddr );
+		($cmd, $arg) = $buf =~ m/^(\w+)\s+(.*)/;
 		if( $cmd eq 'PING' ) {
-			$r = $sock->sendto( "RPING " . $arg, $caddr );
+			$r = $sock->sendto( 'RPING ' . $arg, $caddr );
 			if( ! defined $r ) {
 				warn $sock->error;
 				last;

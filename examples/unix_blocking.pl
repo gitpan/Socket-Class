@@ -12,7 +12,7 @@ our $RUNNING : shared = 1;
 
 $server = Socket::Class->new(
 	'domain' => 'unix',
-	'local_path' => 'testsocket',
+	'local_path' => 'test.socket',
 	'listen' => 5,
 ) or die Socket::Class->error;
 
@@ -123,7 +123,7 @@ sub client_thread {
 		$client_count ++;
 		if( ( $client_count % 1000 ) == 0 ) {
 			my $ac = sprintf( '%0.1f', $client_count / ( &microtime() - $client_ts ) );
-			print "$tid got $client_count packets a $got bytes $ac p/s\n";
+			print "$tid got $client_count packets a $got bytes ($ac p/s)\n";
 		}
 		$got = $sock->is_writable( 100 );
 		if( ! defined $got ) {
