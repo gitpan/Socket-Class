@@ -40,6 +40,7 @@ PREINIT:
 	my_thread_var_t *tv1, *tv2;
 	u_long cascade;
 CODE:
+	if( items ) {} /* avoid compiler warning */
 	if( global.destroyed )
 		return;
 	global.destroyed = 1;
@@ -75,8 +76,7 @@ CODE:
 #ifdef USE_ITHREADS
 
 void
-CLONE( this, ... )
-	SV *this;
+CLONE( ... )
 PREINIT:
 	my_thread_var_t *tv;
 	int i;
@@ -1402,7 +1402,7 @@ _inet6e:
 		break;
 	default:
 _default:
-		break;
+		goto exit;
 #endif
 	}
 exit:
@@ -1481,7 +1481,7 @@ get_hostname( this, addr = NULL )
 PREINIT:
 	my_thread_var_t *tv;
 	my_sockaddr_t *saddr;
-	const char *s1;
+	const char *s1 = NULL;
 	STRLEN l1;
 #ifndef SC_OLDNET
 	struct addrinfo aih;
@@ -1621,6 +1621,7 @@ PPCODE:
 	}
 unlock:
 	GLOBAL_UNLOCK();
+	goto exit;
 #endif
 exit:
 	TV_UNLOCK( tv );
@@ -1731,7 +1732,7 @@ _exit:
 void
 getaddrinfo( ... )
 PREINIT:
-	my_thread_var_t *tv;
+	my_thread_var_t *tv = NULL;
 	int ipos = 0, r;
 	struct addrinfo aih;
 	struct addrinfo *ail = NULL, *ai;
@@ -1874,13 +1875,6 @@ PPCODE:
 					newSViv( ((SOCKADDR_L2CAP *) ai->ai_addr)->bt_port ), 0 );
 			}
 			break;
-		case AF_IRDA:
-			hv_store( hv, "familyname", 10, newSVpvn( "IRDA", 4 ), 0 );
-			/*
-			hv_store( hv, "deviceid", 8,
-				newSVpv( ((SOCKADDR_IRDA *) ai->ai_addr)->irdaDeviceID, 0 ), 0 );
-			*/
-			break;
 		}
 		/* sockname */
 		switch( ai->ai_socktype ) {
@@ -1948,7 +1942,7 @@ PPCODE:
 void
 getnameinfo( ... )
 PREINIT:
-	my_thread_var_t *tv;
+	my_thread_var_t *tv = NULL;
 	int ipos = 0, r;
 	STRLEN len;
 	char host[NI_MAXHOST];
@@ -2431,7 +2425,7 @@ PPCODE:
 		goto _set;
 	}
 	TV_ERRNO( tv, 0 );
-	if( level = SOL_SOCKET ) {
+	if( level == SOL_SOCKET ) {
 		switch( optname ) {
 		case SO_LINGER:
 			XPUSHs( sv_2mortal(
@@ -2711,6 +2705,7 @@ PREINIT:
 	struct timeval t;
 #endif
 PPCODE:
+	if( this != NULL ) {} /* avoid compiler warning */
 #ifdef _WIN32
 	Sleep( timeout );
 #else

@@ -4,7 +4,7 @@ package Socket::Class::Const;
 #use strict;
 #use warnings;
 
-use vars qw($VERSION $WIN);
+our( $VERSION, $WIN );
 
 BEGIN {
 	$VERSION = '1.0';
@@ -91,18 +91,18 @@ our $SOS_CLOSED			= 4;
 our $SOS_ERROR			= 99;
 
 # getaddrinfo flags
-our $AI_PASSIVE					= 0x0001;
-our $AI_CANONNAME				= 0x0002;
-our $AI_NUMERICHOST				= 0x0004;
-our $AI_ADDRCONFIG				= 0x0400;
-our $AI_NUMERICSERV				= 0x0400;
+our $AI_PASSIVE			= 0x0001;
+our $AI_CANONNAME		= 0x0002;
+our $AI_NUMERICHOST		= 0x0004;
+our $AI_ADDRCONFIG		= 0x0400;
+our $AI_NUMERICSERV		= 0x0400;
 
 # getnameinfo flags
-our $NI_NUMERICHOST				= $WIN ? 2 : 1;
-our $NI_NUMERICSERV				= $WIN ? 8 : 2;
-our $NI_NOFQDN					= $WIN ? 1 : 4;
-our $NI_NAMEREQD				= $WIN ? 4 : 8;
-our $NI_DGRAM					= 16;
+our $NI_NUMERICHOST		= $WIN ? 2 : 1;
+our $NI_NUMERICSERV		= $WIN ? 8 : 2;
+our $NI_NOFQDN			= $WIN ? 1 : 4;
+our $NI_NAMEREQD		= $WIN ? 4 : 8;
+our $NI_DGRAM			= 16;
 
 
 our @EXPORT_OK = qw(

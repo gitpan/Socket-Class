@@ -3,7 +3,8 @@ use ExtUtils::MakeMaker;
 use Config;
 
 my %os_supported = (
-	'linux' => 1, 'MSWin32' => 1, 'darwin' => 1, 'cygwin' => 1
+	'linux' => 1, 'MSWin32' => 1, 'darwin' => 1, 'cygwin' => 1, 'aix' => 1,
+	'solaris' => 1
 );
 
 if( ! $os_supported{$^O} ) {
@@ -51,6 +52,9 @@ if( $Config{'usethreads'} ) {
 if( $_DEBUG ) {
 	print "enable debug messages\n";
 	$_MAKEOPTS{'DEFINE'} .= ' -DSC_DEBUG=' . $_DEBUG;
+	if( $^O eq 'linux' ) {
+		$_MAKEOPTS{'DEFINE'} .= ' -Wall';
+	}
 }
 if( $^O eq 'MSWin32' ) {
 	$_MAKEOPTS{'DEFINE'} .= ' -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS';

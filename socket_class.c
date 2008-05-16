@@ -2,7 +2,7 @@
 
 my_global_t global;
 
-void my_thread_var_add( my_thread_var_t *tv ) {
+INLINE void my_thread_var_add( my_thread_var_t *tv ) {
 	size_t cascade = (size_t) tv % SC_TV_CASCADE;
 #ifdef SC_DEBUG
 	_debug( "add tv 0x%08x cascade %u\n", tv, cascade );
@@ -21,7 +21,7 @@ void my_thread_var_add( my_thread_var_t *tv ) {
 	GLOBAL_UNLOCK();
 }
 
-void my_thread_var_free( my_thread_var_t *tv ) {
+INLINE void my_thread_var_free( my_thread_var_t *tv ) {
 	TV_LOCK( tv );
 #ifdef SC_DEBUG
 	_debug( "free tv 0x%08x socket %d\n", tv, tv->sock );
@@ -39,7 +39,7 @@ void my_thread_var_free( my_thread_var_t *tv ) {
 	Safefree( tv );
 }
 
-void my_thread_var_rem( my_thread_var_t *tv ) {
+INLINE void my_thread_var_rem( my_thread_var_t *tv ) {
 	size_t cascade = (size_t) tv % SC_TV_CASCADE;
 	GLOBAL_LOCK();
 #ifdef SC_DEBUG
@@ -57,7 +57,7 @@ void my_thread_var_rem( my_thread_var_t *tv ) {
 	GLOBAL_UNLOCK();
 }
 
-my_thread_var_t *my_thread_var_find( SV *sv ) {
+INLINE my_thread_var_t *my_thread_var_find( SV *sv ) {
 	size_t cascade;
 	register my_thread_var_t *tvf, *tvl, *tv;
 	if( global.destroyed )
@@ -93,7 +93,7 @@ retl:
 
 #define ISEOL(c) ((c) == '\r' || (c) == '\n') 
 
-void Socket_error( char *str, DWORD len, long num ) {
+INLINE void Socket_error( char *str, DWORD len, long num ) {
 	char *s1;
 	DWORD ret;
 #ifdef SC_DEBUG
@@ -117,18 +117,18 @@ void Socket_error( char *str, DWORD len, long num ) {
 		s1[ret - 1] = '\0';
 }
 
-int inet_aton( const char *cp, struct in_addr *inp ) {
+INLINE int inet_aton( const char *cp, struct in_addr *inp ) {
 	inp->s_addr = inet_addr( cp );
 	return inp->s_addr == INADDR_NONE ? 0 : 1;
 }
 
 #else
 
-void Socket_error( char *str, DWORD len, long num ) {
+INLINE void Socket_error( char *str, DWORD len, long num ) {
 	char *s1, *s2;
 #ifdef SC_DEBUG
 	int ret;
-	ret = snprintf( str, len, "(%d) ", num );
+	ret = snprintf( str, len, "(%ld) ", num );
 	len -= ret;
 	s1 = &str[ret];
 #else
@@ -141,7 +141,7 @@ void Socket_error( char *str, DWORD len, long num ) {
 
 #endif
 
-void Socket_setaddr_UNIX( my_sockaddr_t *addr, const char *path ) {
+INLINE void Socket_setaddr_UNIX( my_sockaddr_t *addr, const char *path ) {
 	struct sockaddr_un *a = (struct sockaddr_un *) addr->a;
 	addr->l = sizeof( struct sockaddr_un );
 	a->sun_family = AF_UNIX;
@@ -149,7 +149,7 @@ void Socket_setaddr_UNIX( my_sockaddr_t *addr, const char *path ) {
 		my_strncpy( a->sun_path, path, 100 );
 }
 
-int Socket_setaddr_INET( tv, host, port, use )
+INLINE int Socket_setaddr_INET( tv, host, port, use )
 	my_thread_var_t *tv;
 	const char *host;
 	const char *port;
@@ -269,7 +269,7 @@ exit:
 	return 0;
 }
 
-int Socket_setaddr_BTH(
+INLINE int Socket_setaddr_BTH(
 	my_thread_var_t *tv, const char *host, const char *port, int use
 ) {
 	my_sockaddr_t *addr;
@@ -317,7 +317,7 @@ int Socket_setaddr_BTH(
 	return 0;
 }
 
-int Socket_domainbyname( const char *name ) {
+INLINE int Socket_domainbyname( const char *name ) {
 	char tmp[20];
 	my_strncpyu( tmp, name, sizeof( tmp ) );
 	if( strcmp( tmp, "INET" ) == 0 ) {
@@ -341,7 +341,7 @@ int Socket_domainbyname( const char *name ) {
 	return AF_UNSPEC;
 }
 
-int Socket_typebyname( const char *name ) {
+INLINE int Socket_typebyname( const char *name ) {
 	char tmp[20];
 	my_strncpyu( tmp, name, sizeof( tmp ) );
 	if( strcmp( tmp, "STREAM" ) == 0 ) {
@@ -359,7 +359,7 @@ int Socket_typebyname( const char *name ) {
 	return 0;
 }
 
-int Socket_protobyname( const char *name ) {
+INLINE int Socket_protobyname( const char *name ) {
 	char tmp[20];
 	my_strncpyu( tmp, name, sizeof( tmp ) );
 	if( strcmp( tmp, "TCP" ) == 0 ) {
@@ -387,7 +387,7 @@ int Socket_protobyname( const char *name ) {
 	}
 }
 
-int Socket_setopt(
+INLINE int Socket_setopt(
 	SV *this, int level, int optname, const void *optval, socklen_t optlen
 ) {
 	my_thread_var_t *tv;
@@ -405,7 +405,7 @@ int Socket_setopt(
 	}
 }
 
-int Socket_getopt(
+INLINE int Socket_getopt(
 	SV *this, int level, int optname, void *optval, socklen_t *optlen
 ) {
 	my_thread_var_t *tv;
@@ -423,7 +423,7 @@ int Socket_getopt(
 	}
 }
 
-int Socket_setblocking( SOCKET s, int value ) {
+INLINE int Socket_setblocking( SOCKET s, int value ) {
 #ifdef _WIN32
 	int r;
 	u_long val = (u_long) ! value;
@@ -446,7 +446,7 @@ int Socket_setblocking( SOCKET s, int value ) {
 	return r;
 }
 
-int Socket_write( SV *this, const char *buf, size_t len ) {
+INLINE int Socket_write( SV *this, const char *buf, size_t len ) {
 	my_thread_var_t *tv;
 	STRLEN pos;
 	int r;
@@ -500,7 +500,7 @@ exit:
 	return r;
 }
 
-int my_ba2str( const bdaddr_t *ba, char *str ) {
+INLINE int my_ba2str( const bdaddr_t *ba, char *str ) {
 	register const unsigned char *b = (const unsigned char *) ba;
 	return sprintf( str,
 		"%2.2X:%2.2X:%2.2X:%2.2X:%2.2X:%2.2X",
@@ -508,7 +508,7 @@ int my_ba2str( const bdaddr_t *ba, char *str ) {
 	);
 }
 
-int my_str2ba( const char *str, bdaddr_t *ba ) {
+INLINE int my_str2ba( const char *str, bdaddr_t *ba ) {
 	register unsigned char *b = (unsigned char *) ba;
 	const char *ptr = (str != NULL ? str : "00:00:00:00:00:00");
 	int i;
@@ -521,7 +521,7 @@ int my_str2ba( const char *str, bdaddr_t *ba ) {
 	return 0;
 }
 
-char *my_itoa( char *str, long value, int radix ) {
+INLINE char *my_itoa( char *str, long value, int radix ) {
 	static const char HEXTAB[] = {
 		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 		'A', 'B', 'C', 'D', 'E', 'F'
@@ -553,7 +553,7 @@ char *my_itoa( char *str, long value, int radix ) {
 	return str;
 }
 
-char *my_strncpy( char *dst, const char *src, size_t len ) {
+INLINE char *my_strncpy( char *dst, const char *src, size_t len ) {
 	register char ch;
 	for( ; len > 0; len -- ) {
 		if( (ch = *src ++) == '\0' ) {
@@ -566,7 +566,7 @@ char *my_strncpy( char *dst, const char *src, size_t len ) {
 	return dst;
 }
 
-char *my_strcpy( char *dst, const char *src ) {
+INLINE char *my_strcpy( char *dst, const char *src ) {
 	register char ch;
 	while( 1 ) {
 		if( (ch = *src ++) == '\0' ) {
@@ -578,7 +578,7 @@ char *my_strcpy( char *dst, const char *src ) {
 	return dst;
 }
 
-char *my_strncpyu( char *dst, const char *src, size_t len ) {
+INLINE char *my_strncpyu( char *dst, const char *src, size_t len ) {
 	register char ch;
 	for( ; len > 0; len -- ) {
 		if( (ch = *src ++) == '\0' ) {
@@ -591,7 +591,7 @@ char *my_strncpyu( char *dst, const char *src, size_t len ) {
 	return dst;
 }
 
-int my_stricmp( const char *cs, const char *ct ) {
+INLINE int my_stricmp( const char *cs, const char *ct ) {
 	register signed char res;
 	while( 1 ) {
 		if( (res = toupper( *cs ) - toupper( *ct ++ )) != 0 || ! *cs ++ )
@@ -602,7 +602,7 @@ int my_stricmp( const char *cs, const char *ct ) {
 
 #ifdef SC_DEBUG
 
-int my_debug( const char *fmt, ... ) {
+INLINE int my_debug( const char *fmt, ... ) {
 	va_list a;
 	int r;
 	size_t l;

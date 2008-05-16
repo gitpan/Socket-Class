@@ -54,8 +54,19 @@
 
 #define __PACKAGE__ "Socket::Class"
 
+#if defined _WIN32
+#define INLINE __inline
+#define EXTERN extern
+#elif defined __GNUC__
+#define INLINE inline
+#define EXTERN extern inline
+#else
+#define INLINE
+#define EXTERN
+#endif
+
 #ifdef SC_DEBUG
-int my_debug( const char *fmt, ... );
+EXTERN int my_debug( const char *fmt, ... );
 #define _debug my_debug
 #endif
 
@@ -86,11 +97,11 @@ int my_debug( const char *fmt, ... );
 #	define UXLONG unsigned long
 #endif
 
-#ifdef _WIN32
+#if defined _WIN32
 typedef unsigned short			uint16_t;
 typedef unsigned char			uint8_t;
 typedef unsigned short			sa_family_t;
-#else
+#elif ! defined __sun
 typedef unsigned long			u_long;
 #endif
 
@@ -317,7 +328,7 @@ typedef struct st_my_thread_var {
 #endif
 } my_thread_var_t;
 
-#define SC_TV_CASCADE			9
+#define SC_TV_CASCADE			31
 
 typedef struct st_my_global {
 	my_thread_var_t				*first_thread[SC_TV_CASCADE];
@@ -381,16 +392,16 @@ extern my_global_t global;
 
 #define GLOBAL_ERRNOLAST()	GLOBAL_ERRNO(Socket_errno())
 
-void my_thread_var_add( my_thread_var_t *tv );
-void my_thread_var_rem( my_thread_var_t *tv );
-void my_thread_var_free( my_thread_var_t *tv );
-my_thread_var_t *my_thread_var_find( SV *sv );
+EXTERN void my_thread_var_add( my_thread_var_t *tv );
+EXTERN void my_thread_var_rem( my_thread_var_t *tv );
+EXTERN void my_thread_var_free( my_thread_var_t *tv );
+EXTERN my_thread_var_t *my_thread_var_find( SV *sv );
 
-char *my_itoa( char *str, long value, int radix );
-char *my_strncpy( char *dst, const char *src, size_t len );
-char *my_strcpy( char *dst, const char *src );
-char *my_strncpyu( char *dst, const char *src, size_t len );
-int my_stricmp( const char *cs, const char *ct );
+EXTERN char *my_itoa( char *str, long value, int radix );
+EXTERN char *my_strncpy( char *dst, const char *src, size_t len );
+EXTERN char *my_strcpy( char *dst, const char *src );
+EXTERN char *my_strncpyu( char *dst, const char *src, size_t len );
+EXTERN int my_stricmp( const char *cs, const char *ct );
 
 #ifdef _WIN32
 
@@ -401,7 +412,7 @@ int my_stricmp( const char *cs, const char *ct );
 
 #define Socket_errno()            WSAGetLastError()
 
-int inet_aton( const char *cp, struct in_addr *inp );
+EXTERN int inet_aton( const char *cp, struct in_addr *inp );
 
 #else
 
@@ -414,29 +425,30 @@ int inet_aton( const char *cp, struct in_addr *inp );
 
 #endif
 
-void Socket_setaddr_UNIX( my_sockaddr_t *addr, const char *path );
-int Socket_setaddr_INET(
+EXTERN void Socket_setaddr_UNIX( my_sockaddr_t *addr, const char *path );
+EXTERN int Socket_setaddr_INET(
 	my_thread_var_t *tv, const char *host, const char *port, int use );
-int Socket_setaddr_BTH(
+EXTERN int Socket_setaddr_BTH(
 	my_thread_var_t *tv, const char *host, const char *port, int use );
-int Socket_setblocking( SOCKET s, int value );
-int Socket_setopt(
+EXTERN int Socket_setblocking( SOCKET s, int value );
+EXTERN int Socket_setopt(
 	SV *this, int level, int optname, const void *optval, socklen_t optlen );
-int Socket_getopt(
+EXTERN int Socket_getopt(
 	SV *this, int level, int optname, void *optval, socklen_t *optlen );
-int Socket_domainbyname( const char *name );
-int Socket_typebyname( const char *name );
-int Socket_protobyname( const char *name );
-int Socket_write( SV *this, const char *buf, size_t len );
-void Socket_error( char *str, DWORD len, long num );
+EXTERN int Socket_domainbyname( const char *name );
+EXTERN int Socket_typebyname( const char *name );
+EXTERN int Socket_protobyname( const char *name );
+EXTERN int Socket_write( SV *this, const char *buf, size_t len );
+EXTERN void Socket_error( char *str, DWORD len, long num );
 
 #define IPPORT4(ip,port) \
-	((ip) >> 0) & 0xFF, ((ip) >> 8) & 0xFF, ((ip) >> 16) & 0xFF \
-		, ((ip) >> 24) & 0xFF, ntohs( (port) )
+	(BYTE) ((ip) >> 0) & 0xFF, (BYTE) ((ip) >> 8) & 0xFF, \
+	(BYTE) ((ip) >> 16) & 0xFF, (BYTE) ((ip) >> 24) & 0xFF, \
+	ntohs( (port) )
 
 #define IP4(ip) \
-	((ip) >> 0) & 0xFF, ((ip) >> 8) & 0xFF, ((ip) >> 16) & 0xFF \
-		, ((ip) >> 24) & 0xFF
+	(BYTE) ((ip) >> 0) & 0xFF, (BYTE) ((ip) >> 8) & 0xFF, \
+	(BYTE) ((ip) >> 16) & 0xFF, (BYTE) ((ip) >> 24) & 0xFF
 
 #define IPPORT6(in6,port) \
 	(in6)[0], (in6)[1], (in6)[2], (in6)[3], (in6)[4], (in6)[5], \
@@ -447,11 +459,11 @@ void Socket_error( char *str, DWORD len, long num );
 	(in6)[6], (in6)[7]
 
 
-int my_ba2str( const bdaddr_t *ba, char *str );
-int my_str2ba( const char *str, bdaddr_t *ba );
+EXTERN int my_ba2str( const bdaddr_t *ba, char *str );
+EXTERN int my_str2ba( const char *str, bdaddr_t *ba );
 
 #ifdef SC_HAS_BLUETOOTH
-extern void boot_Socket__Class__BT();
+EXTERN void boot_Socket__Class__BT();
 #endif
 
 #ifdef SC_USE_BLUEZ

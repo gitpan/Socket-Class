@@ -1,5 +1,10 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.21
+    - added support for sun solaris 10
+    - fixed function "get_option"
+    - changed cascading from 10 to 32 places
+
 version 1.20
     - added functions "getaddrinfo", "getnameinfo"
     - added garbage method again. auto destruction should work now

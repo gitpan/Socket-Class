@@ -12,7 +12,7 @@ package Socket::Class;
 our( $VERSION );
 
 BEGIN {
-	$VERSION = '1.20';
+	$VERSION = '1.21';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -31,15 +31,19 @@ sub import {
 }
 
 sub printf {
-	@_ >= 2
-		or &Carp::croak( 'Usage: Socket::Class::printf(this,fmt,...)' );
+	if( @_ < 2 ) {
+		$Carp::VERSION or require Carp;
+		&Carp::croak( 'Usage: Socket::Class::printf(this,fmt,...)' );
+	}
 	my( $sock, $fmt ) = ( shift, shift );
 	return &write( $sock, sprintf( $fmt, @_ ) );
 }
 
 sub reconnect {
-	@_ >= 1 && @_ <= 2
-		or &Carp::croak( 'Usage: Socket::Class::reconnect(this,wait=0)' );
+	if( @_ < 1 || @_ > 2 ) {
+		$Carp::VERSION or require Carp;
+		&Carp::croak( 'Usage: Socket::Class::reconnect(this,wait=0)' );
+	}
 	&close( $_[0] ) or return undef;
 	&wait( $_[0], $_[1] ) if $_[1];
 	&connect( $_[0] ) or return undef;
@@ -320,14 +324,15 @@ pairs.
 
 =for formatter perl
 
-If I<local_addr>, I<local_port> or I<local_path> is defined then the socket
-will bind a local address. If I<listen> is defined then the socket will put
+If I<local_addr>, I<local_port> or I<local_path> is defined, then the socket
+will bind a local address. If I<listen> is defined, then the socket will put
 into listen state. If I<remote_addr>, I<remote_port> or I<remote_path> is
 defined then I<connect()> is called.
 
-Standard I<domain> is AF_INET. Standard I<type> is SOCK_STREAM. Standard
-I<proto> is IPPROTO_TCP. If I<local_path> or I<remote_path> is defined the
-standard domain changes to AF_UNIX and the standard protocol changes to 0.
+Standard I<domain> is AF_INET. Standard socket I<type> is SOCK_STREAM.
+Standard I<proto> is IPPROTO_TCP. If I<local_path> or I<remote_path> is
+defined, then the standard domain becomes AF_UNIX and the standard
+protocol becomes 0.
 
 B<Examples>
 
@@ -358,7 +363,7 @@ I<Connect to smtp service (port 25) on localhost>
 I<Create a broadcast socket>
 
   $sock = Socket::Class->new(
-      'remote_addr' => "255.255.255.255",
+      'remote_addr' => '255.255.255.255',
       'remote_port' => 9999,
       'proto' => 'udp',
       'local_addr' => 'localhost',
@@ -370,7 +375,7 @@ I<Create a broadcast socket>
 
 =head2 Closing / Destructing / Freeing
 
-Undefining the reference variable will free the socket and its resources.
+Undefining all reference variables will free the socket and its resources.
 
 You can also call I<free()> to free the socket explicitly.
 
@@ -399,7 +404,7 @@ be allowed. Default is $SD_SEND.
 
 B<Return Values>
 
-Returns TRUE on succes or FALSE on failure.
+Returns a true value on succes or undef on failure.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
@@ -458,7 +463,7 @@ The I<$port> parameter designates the port or channel on the local host.
 
 B<Return Values>
 
-Returns TRUE on succes or FALSE on failure.
+Returns a true value on succes or undef on failure.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
@@ -484,7 +489,7 @@ so that retries may succeed.
 
 B<Return Values>
 
-Returns TRUE on succes or FALSE on failure.
+Returns a true value on succes or undef on failure.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
@@ -598,7 +603,7 @@ reconnects the socket to the connection previously made.
 
 B<Return Values>
 
-Returns a TRUE value on succes or UNDEF on failure.
+Returns a true value on succes or undef on failure.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
@@ -651,7 +656,7 @@ The value of I<$flags> can be any combination of the following:
 
 B<Return Values>
 
-Returns the number of bytes sent or UNDEF if an error occured.
+Returns the number of bytes sent or undef if an error occured.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
@@ -703,7 +708,7 @@ The value of I<$flags> can be any combination of the following:
 
 B<Return Values>
 
-Returns the number of bytes received or UNDEF on error.
+Returns the number of bytes received or undef on error.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
@@ -742,7 +747,7 @@ The value of I<$flags> can be any combination of the following:
 
 B<Return Values>
 
-Returns the bytes sent to the remote host or UNDEF on error.
+Returns the bytes sent to the remote host or undef on error.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
@@ -805,7 +810,7 @@ I<$flags> parameter. Use the OR logic operator (|) to use more than one flag.
 B<Return Values>
 
 Returns a packed address of the sender or 0 on non-blocking mode and no data
-becomes available or UNDEF on error.
+becomes available or undef on error.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
@@ -894,7 +899,7 @@ The maximum number of bytes read is specified by the length parameter.
 
 B<Return Values>
 
-Returns number of bytes read or UNDEF on error.
+Returns number of bytes read, or undef on error.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
@@ -905,7 +910,7 @@ Writes to the socket from the given parameters. I<print> maps to I<write>
 
 B<Return Values>
 
-Returns the number of bytes successfully written to the socket or UNDEF on
+Returns the number of bytes successfully written to the socket, or undef on
 error.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
@@ -951,7 +956,7 @@ I<writeline> is a synonym for I<say>.
 
 B<Return Values>
 
-Returns the number of bytes successfully written to the socket or UNDEF on
+Returns the number of bytes successfully written to the socket, or undef on
 error.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
@@ -967,7 +972,7 @@ Reads characters from the socket and stops at \n or \r\n.
 
 B<Return Values>
 
-Returns a string value or UNDEF on error.
+Returns a string value, or undef on error.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
@@ -990,7 +995,7 @@ On 1 set blocking mode, on 0 set non-blocking mode.
 
 B<Return Values>
 
-Return a TRUE value on succes or UNDEF on error.
+Return a true value on succes, or undef on error.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
@@ -1484,7 +1489,7 @@ The socket type as name or number.
 I<$flags>
 
 Flags that indicate options used.
-See also L<getaddrinfo() flags|Socket::Class::Const/getaddrinfo___flags>
+See also L<getaddrinfo() flags|Socket::Class::Const/getaddrinfo()_flags>
 in L<Socket::Class::Const|Socket::Class::Const>
 
 B<Return Values>
@@ -1559,7 +1564,7 @@ A packed host address. See also C<pack_addr()>, C<getaddrinfo()>
 I<$flags>
 
 A value used to customize processing of the I<getnameinfo> function.
-See also L<getnameinfo() flags|Socket::Class::Const/getnameinfo___flags>
+See also L<getnameinfo() flags|Socket::Class::Const/getnameinfo()_flags>
 in L<Socket::Class::Const|Socket::Class::Const>
 
 B<Return Values>
