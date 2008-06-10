@@ -12,7 +12,8 @@ L2CAP (datagram). Bluetooth adapters on a MS-Windows operation system must be
 compatible with the Windows Bluetooth API to get it working.
 More specific Bluetooth support could be added in the future.
 
-It has been tested on unix, darwin, MSWin(32,x64) and cygwin platforms.
+It has been tested on unix, darwin, MSWin(32,x64), cygwin, solaris and aix
+platforms.
 
 INSTALLATION
 

@@ -1,7 +1,5 @@
 package Socket::Class::Async;
 
-use 5.008;
-
 use Carp();
 use Socket::Class ($SOS_LISTEN $SOS_CONNECTED);
 
@@ -16,7 +14,7 @@ use bytes;
 use vars qw($VERSION @ISA);
 
 BEGIN {
-	$VERSION = '1.0';
+	$VERSION = '1.1';
 	@ISA = qw(Socket::Class);
 }
 
@@ -358,7 +356,7 @@ This Module is experimental and may change in future.
 
 =head1 AUTHORS
 
-Christian Mueller <christian_at_hbr1.com>
+Written and maintained by Christian Mueller
 
 =head1 COPYRIGHT
 

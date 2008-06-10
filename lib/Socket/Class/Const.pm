@@ -7,20 +7,23 @@ package Socket::Class::Const;
 our( $VERSION, $WIN );
 
 BEGIN {
-	$VERSION = '1.0';
+	$VERSION = '1.22';
 	$WIN = $^O eq 'MSWin32';
+	$AIX = $^O eq 'aix';
 	# register global functions for export
 	*getaddrinfo = \&Socket::Class::getaddrinfo;
 	*getnameinfo = \&Socket::Class::getnameinfo;
 }
 
 # address family types
+our $AF_UNSPEC			= 0;
 our $AF_UNIX			= 1;
 our $AF_INET			= 2;
-our $AF_INET6			= $WIN ? 23 : 10;
+our $AF_INET6			= $WIN ? 23 : $AIX ? 24 : 10;
 our $AF_BLUETOOTH		= $WIN ? 32 : 31;
 
 # protocol family types
+our $PF_UNSPEC			= $AF_UNSPEC;
 our $PF_UNIX 			= $AF_UNIX;
 our $PF_INET			= $AF_INET;
 our $PF_INET6			= $AF_INET6;
@@ -87,7 +90,8 @@ our $SOS_INIT			= 0;
 our $SOS_BOUND			= 1;
 our $SOS_LISTEN			= 2;
 our $SOS_CONNECTED		= 3;
-our $SOS_CLOSED			= 4;
+our $SOS_SHUTDOWN		= 4;
+our $SOS_CLOSED			= 5;
 our $SOS_ERROR			= 99;
 
 # getaddrinfo flags
@@ -106,8 +110,8 @@ our $NI_DGRAM			= 16;
 
 
 our @EXPORT_OK = qw(
-	$AF_UNIX $AF_INET $AF_INET6 $AF_BLUETOOTH
-	$PF_UNIX $PF_INET $PF_INET6 $PF_BLUETOOTH
+	$AF_UNSPEC $AF_UNIX $AF_INET $AF_INET6 $AF_BLUETOOTH
+	$PF_UNSPEC $PF_UNIX $PF_INET $PF_INET6 $PF_BLUETOOTH
 	$SOCK_STREAM $SOCK_DGRAM
 	$IPPROTO_ICMP $IPPROTO_TCP $IPPROTO_UDP
 	$BTPROTO_RFCOMM $BTPROTO_L2CAP
@@ -120,7 +124,8 @@ our @EXPORT_OK = qw(
 	$SO_RCVLOWAT $SO_SNDLOWAT $SO_RCVTIMEO $SO_SNDTIMEO $SO_ACCEPTCON
 	$TCP_NODELAY
 	$SD_RECEIVE $SD_SEND $SD_BOTH
-	$SOS_INIT $SOS_BOUND $SOS_LISTEN $SOS_CONNECTED $SOS_CLOSED $SOS_ERROR
+	$SOS_INIT $SOS_BOUND $SOS_LISTEN $SOS_CONNECTED $SOS_SHUTDOWN $SOS_CLOSED
+	$SOS_ERROR
 	$AI_PASSIVE $AI_CANONNAME $AI_NUMERICHOST $AI_ADDRCONFIG $AI_NUMERICSERV
 	$NI_NUMERICHOST $NI_NUMERICSERV $NI_NOFQDN $NI_NAMEREQD $NI_DGRAM
 	&getaddrinfo &getnameinfo
@@ -504,7 +509,7 @@ services for UDP and TCP.
 
 =head1 AUTHORS
 
-Written and currently maintained by Christian Mueller
+Written and maintained by Christian Mueller
 
 =head1 COPYRIGHT
 

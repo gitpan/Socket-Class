@@ -12,7 +12,7 @@ package Socket::Class;
 our( $VERSION );
 
 BEGIN {
-	$VERSION = '1.21';
+	$VERSION = '1.22';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -170,6 +170,7 @@ B<Miscellaneous Functions>
 
 =item
 
+L<available|Socket::Class/available>,
 L<fileno|Socket::Class/fileno>,
 L<handle|Socket::Class/handle>,
 L<is_readable|Socket::Class/is_readable>,
@@ -851,7 +852,7 @@ L<Socket::Class::Const|Socket::Class::Const>
 
 =over 4
 
-=item B<write ( $buffer [, $length] )>
+=item B<write ( $buffer [, $start [, $length]] )>
 
 Writes to the socket from the given buffer.
 
@@ -860,6 +861,11 @@ B<Parameters>
 I<$buffer>
 
 The buffer to be written. 
+
+I<$start>
+
+The optional parameter I<$start> can specify an alternate offset in the
+buffer.
 
 I<$length>
 
@@ -882,6 +888,18 @@ of data, even one byte, is written though your buffer is greater. You have
 to watch out so you don't unintentionally forget to transmit the rest of
 your data. 
 
+B<Examples>
+
+  # generate 1mb of data
+  $data = '#' x 1048576;
+  # send the data out
+  $start = 0;
+  $size = length( $data );
+  while( ! $sock->is_error && $start < $size ) {
+      if( $sock->is_writable( 100 ) ) {
+          $start += $sock->write( $data, $start );
+      }
+  }
 
 =item B<read ( $buffer, $length )>
 
@@ -968,7 +986,7 @@ B<Examples>
 
 =item B<readline ()>
 
-Reads characters from the socket and stops at \n or \r\n.
+Reads characters from the socket and stops at \n, \r or \0.
 
 B<Return Values>
 
@@ -1472,19 +1490,19 @@ dotted-decimal IPv4 address or an IPv6 hex address.
 
 I<$service>
 
-A service name or port number.
+A service name or port number, or undef if it is unused.
 
 I<$family>
 
-The address family as name or number.
+The address family as name or number, or undef if it is unused.
 
 I<$proto>
 
-The protocol type as name or number.
+The protocol type as name or number, or undef if it is unused.
 
 I<$type>
 
-The socket type as name or number.
+The socket type as name or number, or undef if it is unused.
 
 I<$flags>
 
@@ -1524,7 +1542,7 @@ I<getaddrinfo()> as global function
       or die Socket::Class->error;
 
 
-I<getaddrinfo()> from object
+I<getaddrinfo()> within an object
 
   $sock = Socket::Class->new();
   @list = $sock->getaddrinfo( 'localhost' )
@@ -1536,6 +1554,10 @@ I<getaddrinfo()> exported
   use Socket::Class qw(&getaddrinfo);
   
   @list = &getaddrinfo( 'localhost' )
+      or die $!;
+  
+  # get SOCK_STREAM interfaces only
+  @list = &getaddrinfo( 'localhost', undef, undef, undef, 'stream' )
       or die $!;
 
 
@@ -1583,7 +1605,7 @@ I<getnameinfo()> as global function
   print "host: $host, service: $service\n";
 
 
-I<getnameinfo()> from object
+I<getnameinfo()> within an object
 
   $sock = Socket::Class->new();
   ($host, $service) = $sock->getnameinfo( '127.0.0.1', 80 )
@@ -1606,9 +1628,37 @@ I<getnameinfo()> exported
 
 =over 4
 
+=item B<available ()>
+
+Gets the amount of data that is available to be read.
+
+B<Return Values>
+
+Returns the number of bytes that is available to be read, or undef on error.
+The error code can be retrieved with L<errno()|Socket::Class/errno>
+and the error string can be retrieved with L<error()|Socket::Class/error>. 
+
+B<Remarks>
+
+On blocking sockets the function can block indefinitely.
+You should call L<is_readable()|Socket::Class/is_readable> before running this
+function.
+
+B<Examples>
+
+  while( ! $sock->is_error ) {
+      if( $sock->is_readable( 1000 ) ) {
+          $size = $sock->available
+              or die $sock->error;
+          print "bytes to read: $size\n";
+          $got = $sock->read( $buf, $size );
+              or die $sock->error;
+      }
+  }
+
 =item B<is_readable ( [$timeout] )>
 
-Does a read select on the socket and returns the result.
+Checks the socket for readability.
 
 B<Parameters>
 
@@ -1628,7 +1678,7 @@ and the error string can be retrieved with L<error()|Socket::Class/error>.
 
 =item B<is_writable ( [$timeout] )>
 
-Does a write select on the socket and returns the result.
+Checks the socket for writability.
 
 B<Parameters>
 
@@ -1926,7 +1976,7 @@ from the last occurred error.
 
 =head1 AUTHORS
 
-Written and currently maintained by Christian Mueller
+Written and maintained by Christian Mueller
 
 =head1 COPYRIGHT
 

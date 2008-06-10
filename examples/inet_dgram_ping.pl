@@ -27,7 +27,8 @@ $paddr = $client->pack_addr( '127.0.0.1', $server->local_port );
 $pingcount = 0;
 $pingtime = 0;
 
-while( 1 ) {
+$ts = time;
+while( time - $ts < 3 ) {
 	$r = $client->sendto( 'PING ' . microtime(), $paddr );
 	if( ! defined $r ) {
 		warn $client->error;
@@ -53,8 +54,6 @@ while( 1 ) {
 		say "average ping time $apt ms";
 	}
 }
-
-sleep( 9 );
 
 $RUNNING = 0;
 foreach $thread( threads->list() ) {

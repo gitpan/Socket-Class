@@ -11,10 +11,14 @@ sc_ws2bth.c
 sc_ws2bth.h
 socket_class.c
 socket_class.h
+examples/bigdata_client.pl
+examples/bigdata_server.pl
 examples/inet6_nonblocking.pl
 examples/inet_blocking.pl
 examples/inet_dgram_ping.pl
 examples/inet_nonblock_10clients.pl
+examples/ping_client.pl
+examples/ping_server.pl
 examples/unix_blocking.pl
 lib/Socket/Class/Async.pm
 lib/Socket/Class/Const.pm

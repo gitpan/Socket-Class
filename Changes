@@ -1,5 +1,15 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.22
+    - added function "available"
+    - changed prototype of function "write"
+    - fixed mortal of socket classes that are created by "accept"
+    - fixed value of constant $AF_INET6 on aix
+    - fixed functions "read", "write", "readline" and "writeline"
+    - fixed wrong ip4 and ip6 notations
+    - fixed htons and ntohs on sparc solaris and z/os
+    - fixed detection of new network functions on windows
+
 version 1.21
     - added support for sun solaris 10
     - fixed function "get_option"

@@ -101,15 +101,19 @@ EXTERN int my_debug( const char *fmt, ... );
 typedef unsigned short			uint16_t;
 typedef unsigned char			uint8_t;
 typedef unsigned short			sa_family_t;
-#elif ! defined __sun
+#else
+/*
 typedef unsigned long			u_long;
+*/
 #endif
 
 /* removing from perlio */
+/*
 #undef htonl
 #undef htons
 #undef ntohl
 #undef ntohs
+*/
 #undef accept
 #undef bind
 #undef connect
@@ -248,7 +252,8 @@ struct sockaddr_in6 {
 #define SOCK_STATE_BOUND		1
 #define SOCK_STATE_LISTEN		2
 #define SOCK_STATE_CONNECTED	3
-#define SOCK_STATE_CLOSED		4
+#define SOCK_STATE_SHUTDOWN		4
+#define SOCK_STATE_CLOSED		5
 #define SOCK_STATE_ERROR		99
 
 #define ADDRUSE_CONNECT			0
@@ -305,7 +310,7 @@ typedef struct st_my_sockaddr {
 	char						a[SOCKADDR_SIZE_MAX];
 } my_sockaddr_t;
 
-#define MYSASIZE(sa)			(sa).l + sizeof( socklen_t )
+#define MYSASIZE(sa)			((sa).l + sizeof(socklen_t))
 
 typedef struct st_my_thread_var {
 	struct st_my_thread_var		*prev, *next;
@@ -323,7 +328,7 @@ typedef struct st_my_thread_var {
 	int							refcnt;
 	long						last_errno;
 	char						last_error[256];
-#ifdef SC_THREADS
+#ifdef USE_ITHREADS
 	perl_mutex					thread_lock;
 #endif
 } my_thread_var_t;
@@ -336,14 +341,14 @@ typedef struct st_my_global {
 	long						last_errno;
 	char						last_error[256];
 	int							destroyed;
-#ifdef SC_THREADS
+#ifdef USE_ITHREADS
 	perl_mutex					thread_lock;
 #endif
 } my_global_t;
 
 extern my_global_t global;
 
-#ifdef SC_THREADS
+#ifdef USE_ITHREADS
 
 #define GLOBAL_LOCK()			MUTEX_LOCK( &global.thread_lock )
 #define GLOBAL_UNLOCK()			MUTEX_UNLOCK( &global.thread_lock )
@@ -442,25 +447,32 @@ EXTERN int Socket_write( SV *this, const char *buf, size_t len );
 EXTERN void Socket_error( char *str, DWORD len, long num );
 
 #define IPPORT4(ip,port) \
-	(BYTE) ((ip) >> 0) & 0xFF, (BYTE) ((ip) >> 8) & 0xFF, \
-	(BYTE) ((ip) >> 16) & 0xFF, (BYTE) ((ip) >> 24) & 0xFF, \
+	(BYTE) ((ip) >> 24) & 0xFF, (BYTE) ((ip) >> 16) & 0xFF, \
+	(BYTE) ((ip) >> 8) & 0xFF, (BYTE) ((ip) >> 0) & 0xFF, \
 	ntohs( (port) )
 
 #define IP4(ip) \
-	(BYTE) ((ip) >> 0) & 0xFF, (BYTE) ((ip) >> 8) & 0xFF, \
-	(BYTE) ((ip) >> 16) & 0xFF, (BYTE) ((ip) >> 24) & 0xFF
+	(BYTE) ((ip) >> 24) & 0xFF, (BYTE) ((ip) >> 16) & 0xFF, \
+	(BYTE) ((ip) >> 8) & 0xFF, (BYTE) ((ip) >> 0) & 0xFF
 
 #define IPPORT6(in6,port) \
-	(in6)[0], (in6)[1], (in6)[2], (in6)[3], (in6)[4], (in6)[5], \
-	(in6)[6], (in6)[7], ntohs( (port) )
+	ntohs( (in6)[0] ), ntohs( (in6)[1] ), ntohs( (in6)[2] ), \
+	ntohs( (in6)[3] ), ntohs( (in6)[4] ), ntohs( (in6)[5] ), \
+	ntohs( (in6)[6] ), ntohs( (in6)[7] ), ntohs( (port) )
 
 #define IP6(in6) \
-	(in6)[0], (in6)[1], (in6)[2], (in6)[3], (in6)[4], (in6)[5], \
-	(in6)[6], (in6)[7]
+	ntohs( (in6)[0] ), ntohs( (in6)[1] ), ntohs( (in6)[2] ), \
+	ntohs( (in6)[3] ), ntohs( (in6)[4] ), ntohs( (in6)[5] ), \
+	ntohs( (in6)[6] ), ntohs( (in6)[7] )
 
 
 EXTERN int my_ba2str( const bdaddr_t *ba, char *str );
 EXTERN int my_str2ba( const char *str, bdaddr_t *ba );
+
+/*
+EXTERN unsigned short my_htons( unsigned short a );
+EXTERN unsigned short my_ntohs( unsigned short a );
+*/
 
 #ifdef SC_HAS_BLUETOOTH
 EXTERN void boot_Socket__Class__BT();

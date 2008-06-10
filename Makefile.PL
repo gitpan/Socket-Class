@@ -46,9 +46,6 @@ foreach( @ARGV ) {
     DIR => [],
 );
 
-if( $Config{'usethreads'} ) {
-	$_MAKEOPTS{'DEFINE'} .= ' -DSC_THREADS';
-}
 if( $_DEBUG ) {
 	print "enable debug messages\n";
 	$_MAKEOPTS{'DEFINE'} .= ' -DSC_DEBUG=' . $_DEBUG;
@@ -110,6 +107,7 @@ sub find_header_item {
 	$level ||= 0;
 	$level or print "Looking for '$item' ... ";
 	foreach $p( @$inc ) {
+		$p =~ s/^\"(.+)\"$/$1/;
 		$_ = $p . '/' . $file;
 		-f or next;
 		open $fh, '<' . $_;
@@ -118,7 +116,8 @@ sub find_header_item {
 		foreach( @ct ) {
 			if( m!^\#include\s+[\<\"]([\w\.\_\/\\]+?\.h\w*)[\"\>]! ) {
 				next if $reflist->{$1};
-				return 1 if find_header_item( $inc, $1, $item, $level + 1, $reflist );
+				find_header_item( $inc, $1, $item, $level + 1, $reflist )
+					and return 1;
 			}
 			if( index( $_, $item ) >= 0 ) {
 				print "found\n";

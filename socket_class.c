@@ -7,7 +7,7 @@ INLINE void my_thread_var_add( my_thread_var_t *tv ) {
 #ifdef SC_DEBUG
 	_debug( "add tv 0x%08x cascade %u\n", tv, cascade );
 #endif
-#ifdef SC_THREADS
+#ifdef USE_ITHREADS
 	MUTEX_INIT( &tv->thread_lock );
 #endif
 	GLOBAL_LOCK();
@@ -33,7 +33,7 @@ INLINE void my_thread_var_free( my_thread_var_t *tv ) {
 	Safefree( tv->rcvbuf );
 	Safefree( tv->classname );
 	TV_UNLOCK( tv );
-#ifdef SC_THREADS
+#ifdef USE_ITHREADS
 	MUTEX_DESTROY( &tv->thread_lock );
 #endif
 	Safefree( tv );
@@ -62,7 +62,8 @@ INLINE my_thread_var_t *my_thread_var_find( SV *sv ) {
 	register my_thread_var_t *tvf, *tvl, *tv;
 	if( global.destroyed )
 		return NULL;
-	if( ! SvROK( sv ) || ! ( sv = SvRV( sv ) ) || ! SvIOK( sv ) ) return NULL;
+	if( ! SvROK( sv ) || ! ( sv = SvRV( sv ) ) || ! SvIOK( sv ) )
+		return NULL;
 	tv = INT2PTR( my_thread_var_t *, SvIV( sv ) );
 	cascade = (size_t) tv % SC_TV_CASCADE;
 	GLOBAL_LOCK();
@@ -382,7 +383,7 @@ INLINE int Socket_protobyname( const char *name ) {
 	}
 	else {
 		struct protoent *pe;
-		pe = getprotobyname( name );
+		pe = getprotobyname( (char *) name );
 		return pe != NULL ? pe->p_proto : 0;
 	}
 }
@@ -448,57 +449,62 @@ INLINE int Socket_setblocking( SOCKET s, int value ) {
 
 INLINE int Socket_write( SV *this, const char *buf, size_t len ) {
 	my_thread_var_t *tv;
-	STRLEN pos;
 	int r;
 	tv = my_thread_var_find( this );
 	if( tv == NULL )
 		return SOCKET_ERROR;
 	TV_LOCK( tv );
-	pos = 0;
-	while( len > 0 ) {
-		r = send( tv->sock, &buf[pos], (int) len, 0 );
-		if( r == SOCKET_ERROR ) {
-			if( pos > 0 )
-				break;
-			TV_ERRNOLAST( tv );
-			switch( tv->last_errno ) {
-			case EWOULDBLOCK:
-				/* threat not as an error */
-				tv->last_errno = 0;
-				r = 0;
-				break;
-			default:
-#ifdef SC_DEBUG
-				_debug( "write error %u\n", tv->last_errno );
-#endif
-				tv->state = SOCK_STATE_ERROR;
-				r = SOCKET_ERROR;
-				break;
-			}
-			goto exit;
-		}
-		else if( r == 0 ) {
-			if( pos > 0 )
-				break;
-			TV_ERRNO( tv, ECONNRESET );
+	r = send( tv->sock, buf, (int) len, 0 );
+	if( r == SOCKET_ERROR ) {
+		TV_ERRNOLAST( tv );
+		switch( tv->last_errno ) {
+		case EWOULDBLOCK:
+			/* threat not as an error */
+			tv->last_errno = 0;
+			r = 0;
+			break;
+		default:
 #ifdef SC_DEBUG
 			_debug( "write error %u\n", tv->last_errno );
 #endif
 			tv->state = SOCK_STATE_ERROR;
 			r = SOCKET_ERROR;
-			goto exit;
+			break;
 		}
-		else {
-			pos += r;
-			len -= r;
-		}
+		goto exit;
+	}
+	else if( r == 0 ) {
+		TV_ERRNO( tv, ECONNRESET );
+#ifdef SC_DEBUG
+		_debug( "write error %u\n", tv->last_errno );
+#endif
+		tv->state = SOCK_STATE_ERROR;
+		r = SOCKET_ERROR;
+		goto exit;
 	}
 	TV_ERRNO( tv, 0 );
-	r = (int) pos;
 exit:
 	TV_UNLOCK( tv );
 	return r;
 }
+
+/*
+INLINE unsigned short my_ntohs( unsigned short a ) {
+#if BYTEORDER == 0x4321 || BYTEORDER == 0x87654321
+	return a;
+#else
+	return ((a >> 8) & 0xff) | (a & 0xff) << 8;
+#endif
+}
+
+INLINE unsigned short my_htons( unsigned short a ) {
+#if BYTEORDER == 0x4321 || BYTEORDER == 0x87654321
+	return a;
+#else
+	return ((a >> 8) & 0xff) | (a & 0xff) << 8;
+#endif
+}
+*/
 
 INLINE int my_ba2str( const bdaddr_t *ba, char *str ) {
 	register const unsigned char *b = (const unsigned char *) ba;

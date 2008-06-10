@@ -17,7 +17,7 @@ BOOT:
 	memset( global.first_thread, 0, sizeof( global.first_thread ) );
 	memset( global.last_thread, 0, sizeof( global.last_thread ) );
 	global.destroyed = 0;
-#ifdef SC_THREADS
+#ifdef USE_ITHREADS
 	MUTEX_INIT( &global.thread_lock );
 #endif
 #ifdef SC_OLDNET
@@ -61,7 +61,7 @@ CODE:
 		global.first_thread[cascade] = global.last_thread[cascade] = NULL;
 	}
 	GLOBAL_UNLOCK();
-#ifdef SC_THREADS
+#ifdef USE_ITHREADS
 	MUTEX_DESTROY( &global.thread_lock );
 #endif
 #ifdef _WIN32
@@ -104,15 +104,18 @@ DESTROY( this, ... )
 	SV *this;
 PREINIT:
 	my_thread_var_t *tv;
-CODE:
+PPCODE:
 	if( (tv = my_thread_var_find( this )) == NULL )
 		XSRETURN_EMPTY;
 #ifdef SC_DEBUG
 	_debug( "DESTROY called for tv 0x%08x ref: %d\n", tv, tv->refcnt );
 #endif
 	tv->refcnt --;
-	if( tv->refcnt < 0 )
+	if( tv->refcnt < 0 ) {
+		if( tv->state == SOCK_STATE_CONNECTED )
+			shutdown( tv->sock, 2 );
 		my_thread_var_rem( tv );
+	}
 
 
 #/*****************************************************************************
@@ -367,7 +370,7 @@ PPCODE:
 	_debug( "bless socket %d to %s\n", tv->sock, key );
 #endif
 	hv = gv_stashpv( key, 0 );
-	ST(0) = sv_bless( sv_2mortal( newRV( sv ) ), hv );
+	ST(0) = sv_2mortal( sv_bless( newRV( sv ), hv ) );
 	my_thread_var_add( tv );
 	global.last_errno = 0;
 	global.last_error[0] = '\0';
@@ -604,6 +607,7 @@ PPCODE:
 	}
 	else {
 		tv->last_errno = 0;
+		tv->state = SOCK_STATE_SHUTDOWN;
 		TV_UNLOCK( tv );
 		XSRETURN_YES;
 	}
@@ -765,7 +769,7 @@ PPCODE:
 	getsockname( s, (struct sockaddr *) tv2->l_addr.a, &tv2->l_addr.l );
 	sv = sv_2mortal( newSViv( PTR2IV( tv2 ) ) );
 	hv = gv_stashpv( tv->classname, 0 );
-	ST(0) = sv_bless( newRV( sv ), hv );
+	ST(0) = sv_2mortal( sv_bless( newRV( sv ), hv ) );
 	my_thread_var_add( tv2 );
 	TV_UNLOCK( tv );
 	XSRETURN( 1 );
@@ -1011,7 +1015,6 @@ read( this, buf, len )
 PREINIT:
 	my_thread_var_t *tv;
 	int r;
-	size_t pos = 0;
 PPCODE:
 	if( (tv = my_thread_var_find( this )) == NULL )
 		XSRETURN_EMPTY;
@@ -1020,32 +1023,17 @@ PPCODE:
 		tv->rcvbuf_len = len;
 		Renew( tv->rcvbuf, len, char );
 	}
-	while( len > 0 ) {
-		r = recv( tv->sock, &tv->rcvbuf[pos], (int) len, 0 );
-		if( r == SOCKET_ERROR ) {
-			if( pos > 0 )
-				break;
-			sv_setpvn( buf, "", 0 );
-			TV_ERRNOLAST( tv );
-			switch( tv->last_errno ) {
-			case EWOULDBLOCK:
-				/* threat not as an error */
-				tv->last_errno = 0;
-				TV_UNLOCK( tv );
-				XSRETURN_NO;
-			default:
-#ifdef SC_DEBUG
-				_debug( "read error %u\n", tv->last_errno );
-#endif
-				tv->state = SOCK_STATE_ERROR;
-				TV_UNLOCK( tv );
-				XSRETURN_EMPTY;
-			}
-		}
-		else if( r == 0 ) {
-			if( pos > 0 )
-				break;
-			tv->last_errno = ECONNRESET;
+	r = recv( tv->sock, tv->rcvbuf, (int) len, 0 );
+	if( r == SOCKET_ERROR ) {
+		sv_setpvn( buf, "", 0 );
+		TV_ERRNOLAST( tv );
+		switch( tv->last_errno ) {
+		case EWOULDBLOCK:
+			/* threat not as an error */
+			tv->last_errno = 0;
+			TV_UNLOCK( tv );
+			XSRETURN_NO;
+		default:
 #ifdef SC_DEBUG
 			_debug( "read error %u\n", tv->last_errno );
 #endif
@@ -1053,19 +1041,24 @@ PPCODE:
 			TV_UNLOCK( tv );
 			XSRETURN_EMPTY;
 		}
-		else {
-			pos += r;
-			len -= r;
-		}
+	}
+	else if( r == 0 ) {
+		tv->last_errno = ECONNRESET;
+#ifdef SC_DEBUG
+		_debug( "read error %u\n", tv->last_errno );
+#endif
+		tv->state = SOCK_STATE_ERROR;
+		TV_UNLOCK( tv );
+		XSRETURN_EMPTY;
 	}
 	tv->last_errno = 0;
-	sv_setpvn( buf, tv->rcvbuf, pos );
+	sv_setpvn( buf, tv->rcvbuf, r );
 	TV_UNLOCK( tv );
-	XSRETURN_IV( pos );
+	XSRETURN_IV( r );
 
 
 #/*****************************************************************************
-# * write( this, buf [, length] )
+# * write( this, buf [, start [, length]] )
 # *****************************************************************************/
 
 void
@@ -1074,16 +1067,33 @@ write( this, buf, ... )
 	SV *buf;
 PREINIT:
 	const char *msg;
-	STRLEN len, l2;
-	int r;
+	STRLEN l1;
+	int r, start = 0, len, max, l2;
 PPCODE:
-	msg = SvPV( buf, len );
+	msg = SvPV( buf, l1 );
+	max = len = (int) l1;
 	if( items > 2 ) {
-		l2 = SvIV( ST(2) );
-		if( l2 < len )
+		start = (int) SvIV( ST(2) );
+		if( start < 0 ) {
+			start += max;
+			if( start < 0 )
+				start = 0;
+		}
+		else if( start >= max )
+			XSRETURN_IV( 0 );
+	}
+	if( items > 3 ) {
+		l2 = (int) SvIV( ST(3) );
+		if( l2 < 0 )
+			len += l2;
+		else if( l2 < len )
 			len = l2;
 	}
-	r = Socket_write( this, msg, len );
+	if( start + len > max )
+		len = max - start;
+	if( len <= 0 )
+		XSRETURN_IV( 0 );
+	r = Socket_write( this, msg + (size_t) start, (size_t) len );
 	if( r != SOCKET_ERROR )
 		XSRETURN_IV( r );
 	else
@@ -1105,7 +1115,7 @@ PREINIT:
 	int r;
 PPCODE:
 	msg = SvPVx( buf, len );
-	Newx( tmp, len + 2, char );
+	Newx( tmp, len + 1, char );
 	Copy( msg, tmp, len, char );
 	tmp[len] = '\n';
 	r = Socket_write( this, tmp, len + 1 );
@@ -1137,7 +1147,7 @@ PPCODE:
 			len = pos + l1 + 64;
 			Renew( tmp, len, char );
 		}
-		Copy( s1, &tmp[pos], l1, char );
+		Copy( s1, tmp + pos, l1, char );
 		pos += l1;
 	}
 	if( tmp != NULL ) {
@@ -1161,16 +1171,19 @@ PREINIT:
 	my_thread_var_t *tv;
 	int r;
 	size_t i, pos = 0, len = 256;
+	char *p;
 PPCODE:
 	if( (tv = my_thread_var_find( this )) == NULL )
 		XSRETURN_EMPTY;
 	TV_LOCK( tv );
+	p = tv->rcvbuf;
 	while( 1 ) {
 		if( tv->rcvbuf_len < pos + len ) {
-			tv->rcvbuf_len = pos + len + 1;
+			tv->rcvbuf_len = pos + len;
 			Renew( tv->rcvbuf, tv->rcvbuf_len, char );
+			p = tv->rcvbuf + pos;
 		}
-		r = recv( tv->sock, &tv->rcvbuf[pos], (int) len, MSG_PEEK );
+		r = recv( tv->sock, p, (int) len, MSG_PEEK );
 		if( r == SOCKET_ERROR ) {
 			if( pos > 0 )
 				break;
@@ -1202,29 +1215,90 @@ PPCODE:
 			ST(0) = &PL_sv_undef;
 			goto exit;
 		}
-		for( i = 0; i < (size_t) r; i ++ ) {
-			if( tv->rcvbuf[pos + i] == '\n' ) {
-				/* found newline */
+		for( i = 0; i < (size_t) r; i ++, p ++ ) {
+			if( *p != '\n' && *p != '\r' && *p != '\0' )
+				continue;
+			/* found newline */
 #ifdef SC_DEBUG
-				_debug( "found newline at %d + %d of %d\n", pos, i, r );
+			_debug( "found newline at %d + %d of %d\n", pos, i, r );
 #endif
-				/*
-				if( pos + i > 0 && tv->rcvbuf[pos + i - 1] == '\r' ) {
-					i --;
+			ST(0) = sv_2mortal( newSVpvn( tv->rcvbuf, pos + i ) );
+			if( *p == '\r' ) {
+				if( i < (size_t) r ) {
+					if( p[1] == '\n' )
+						i ++;
 				}
-				*/
-				ST(0) = sv_2mortal( newSVpvn( tv->rcvbuf, pos + i + 1 ) );
-				r = recv( tv->sock, &tv->rcvbuf[pos], (int) i, 0 );
-				goto exit;
+				else if( r == (int) len ) {
+					r = recv( tv->sock, p, 1, MSG_PEEK );
+					if( r == 1 && *p == '\n' )
+						recv( tv->sock, p, 1, 0 );
+				}
 			}
+			recv( tv->sock, tv->rcvbuf + pos, (int) i + 1, 0 );
+			goto exit;
 		}
-		r = recv( tv->sock, &tv->rcvbuf[pos], (int) i, 0 );
+		recv( tv->sock, tv->rcvbuf + pos, (int) i, 0 );
 		pos += i;
+		if( r < (int) len )
+			break;
 	}
 	ST(0) = sv_2mortal( newSVpvn( tv->rcvbuf, pos ) );
 exit:
 	TV_UNLOCK( tv );
 	XSRETURN( 1 );
+
+
+#/*****************************************************************************
+# * available( this )
+# *****************************************************************************/
+
+void
+available( this )
+	SV *this;
+PREINIT:
+	my_thread_var_t *tv;
+	socklen_t ol = sizeof(int);
+	int r, len;
+	char *tmp = NULL;
+PPCODE:
+	if( (tv = my_thread_var_find( this )) == NULL )
+		XSRETURN_EMPTY;
+	TV_LOCK( tv );
+	r = getsockopt( tv->sock, SOL_SOCKET, SO_RCVBUF, (char *) &len, &ol );
+	if( r != 0 ) {
+		tv->last_errno = Socket_errno();
+		tv->state = SOCK_STATE_ERROR;
+		ST(0) = &PL_sv_undef;
+		goto exit;
+	}
+	Newx( tmp, len, char );
+	r = recv( tv->sock, tmp, len, MSG_PEEK );
+	switch( r ) {
+	case SOCKET_ERROR:
+		tv->last_errno = Socket_errno();
+		switch( tv->last_errno ) {
+		case EWOULDBLOCK:
+			/* threat not as an error */
+			tv->last_errno = 0;
+			ST(0) = sv_2mortal( newSViv( 0 ) );
+			break;
+		default:
+			tv->state = SOCK_STATE_ERROR;
+			ST(0) = &PL_sv_undef;
+			break;
+		}
+		goto exit;
+	case 0:
+		tv->last_errno = ECONNRESET;
+		tv->state = SOCK_STATE_ERROR;
+		ST(0) = &PL_sv_undef;
+		goto exit;
+	}
+	ST(0) = sv_2mortal( newSViv( r ) );
+exit:
+	Safefree( tmp );
+	TV_UNLOCK( tv );
+	XSRETURN(1);
 
 
 #/*****************************************************************************
@@ -1450,9 +1524,8 @@ PPCODE:
 		}
 		break;
 	case AF_INET:
-		r = sprintf( tmp, "%u.%u.%u.%u",
-			IP4( ((struct sockaddr_in *) saddr->a )->sin_addr.s_addr )
-		);
+		r = ntohl( ((struct sockaddr_in *) saddr->a )->sin_addr.s_addr );
+		r = sprintf( tmp, "%u.%u.%u.%u", IP4( r ) );
 		XPUSHs( sv_2mortal( newSVpv( tmp, r ) ) );
 		XPUSHs( sv_2mortal( newSViv(
 			ntohs( ((struct sockaddr_in *) saddr->a )->sin_port ) ) ) );
@@ -1671,9 +1744,8 @@ PPCODE:
 	}
 	switch( ail->ai_family ) {
 	case AF_INET:
-		r = sprintf( tmp, "%u.%u.%u.%u",
-			IP4( ((struct sockaddr_in *) ail->ai_addr )->sin_addr.s_addr )
-		);
+		r = ntohl( ((struct sockaddr_in *) ail->ai_addr )->sin_addr.s_addr );
+		r = sprintf( tmp, "%u.%u.%u.%u", IP4( r ) );
 		ST(0) = sv_2mortal( newSVpvn( tmp, r ) );
 		break;
 	case AF_INET6:
@@ -1702,8 +1774,8 @@ PPCODE:
 	}
 	switch( he->h_addrtype ) {
 	case AF_INET:
-		r = sprintf( tmp, "%u.%u.%u.%u",
-			IP4( (*(struct in_addr*) he->h_addr).s_addr ) );
+		r = ntohl( (*(struct in_addr*) he->h_addr).s_addr );
+		r = sprintf( tmp, "%u.%u.%u.%u", IP4( r ) );
 		ST(0) = sv_2mortal( newSVpvn( tmp, r ) );
 		break;
 	case AF_INET6:
@@ -1844,9 +1916,8 @@ PPCODE:
 		switch( ai->ai_family ) {
 		case AF_INET:
 			hv_store( hv, "familyname", 10, newSVpvn( "INET", 4 ), 0 );
-			r = sprintf( tmp, "%u.%u.%u.%u",
-				IP4( ((struct sockaddr_in *) ai->ai_addr )->sin_addr.s_addr )
-			);
+			r = ntohl( ((struct sockaddr_in *) ai->ai_addr )->sin_addr.s_addr );
+			r = sprintf( tmp, "%u.%u.%u.%u", IP4( r ) );
 			hv_store( hv, "addr", 4, newSVpvn( tmp, r ), 0 );
 			hv_store( hv, "port", 4, newSViv(
 				ntohs( ((struct sockaddr_in *) ai->ai_addr )->sin_port ) ), 0 );
@@ -2769,9 +2840,8 @@ PPCODE:
 	TV_LOCK( tv );
 	switch( tv->s_domain ) {
 	case AF_INET:
-		r = sprintf( tmp, "%u.%u.%u.%u",
-			IP4( ((struct sockaddr_in *) tv->l_addr.a )->sin_addr.s_addr )
-		);
+		r = ntohl( ((struct sockaddr_in *) tv->l_addr.a )->sin_addr.s_addr );
+		r = sprintf( tmp, "%u.%u.%u.%u", IP4( r ) );
 		ST(0) = sv_2mortal( newSVpv( tmp, r ) );
 		break;
 	case AF_INET6:
@@ -2880,9 +2950,8 @@ PPCODE:
 	TV_LOCK( tv );
 	switch( tv->s_domain ) {
 	case AF_INET:
-		r = sprintf( tmp, "%u.%u.%u.%u",
-			IP4( ((struct sockaddr_in *) tv->r_addr.a )->sin_addr.s_addr )
-		);
+		r = ntohl( ((struct sockaddr_in *) tv->r_addr.a )->sin_addr.s_addr );
+		r = sprintf( tmp, "%u.%u.%u.%u", IP4( r ) );
 		ST(0) = sv_2mortal( newSVpv( tmp, r ) );
 		break;
 	case AF_INET6:
@@ -2996,39 +3065,42 @@ PPCODE:
 		s1 = my_strcpy( s1, "NONE" );
 	s1 = my_strcpy( s1, ";DOMAIN=" );
 	switch( tv->s_domain ) {
-		case AF_INET:
-			s1 = my_strcpy( s1, "INET" );
-			break;
-		case AF_INET6:
-			s1 = my_strcpy( s1, "INET6" );
-			break;
-		case AF_UNIX:
-			s1 = my_strcpy( s1, "UNIX" );
-			break;
-		case AF_BLUETOOTH:
-			s1 = my_strcpy( s1, "BTH" );
-			break;
-		default:
-			s1 = my_itoa( s1, tv->s_domain, 10 );
-			break;
+	case AF_INET:
+		s1 = my_strcpy( s1, "INET" );
+		break;
+	case AF_INET6:
+		s1 = my_strcpy( s1, "INET6" );
+		break;
+	case AF_UNIX:
+		s1 = my_strcpy( s1, "UNIX" );
+		break;
+	case AF_BLUETOOTH:
+		s1 = my_strcpy( s1, "BTH" );
+		break;
+	default:
+		s1 = my_itoa( s1, tv->s_domain, 10 );
+		break;
 	}
 	s1 = my_strcpy( s1, ";TYPE=" );
 	switch( tv->s_type ) {
-		case SOCK_STREAM:
-			s1 = my_strcpy( s1, "STREAM" );
-			break;
-		case SOCK_DGRAM:
-			s1 = my_strcpy( s1, "DGRAM" );
-			break;
-		case SOCK_RAW:
-			s1 = my_strcpy( s1, "RAW" );
-			break;
-		default:
-			s1 = my_itoa( s1, tv->s_type, 10 );
-			break;
+	case SOCK_STREAM:
+		s1 = my_strcpy( s1, "STREAM" );
+		break;
+	case SOCK_DGRAM:
+		s1 = my_strcpy( s1, "DGRAM" );
+		break;
+	case SOCK_RAW:
+		s1 = my_strcpy( s1, "RAW" );
+		break;
+	default:
+		s1 = my_itoa( s1, tv->s_type, 10 );
+		break;
 	}
 	s1 = my_strcpy( s1, ";PROTO=" );
-	switch( tv->s_proto ) {
+	switch( tv->s_domain ) {
+	case AF_INET:
+	case AF_INET6:
+		switch( tv->s_proto ) {
 		case IPPROTO_TCP:
 			s1 = my_strcpy( s1, "TCP" );
 			break;
@@ -3039,19 +3111,34 @@ PPCODE:
 			s1 = my_strcpy( s1, "ICMP" );
 			break;
 		default:
-			s1 = my_itoa( s1, tv->s_proto, 10 );
+			goto unknown_proto;
+		}
+		break;
+	case AF_BLUETOOTH:
+		switch( tv->s_proto ) {
+		case BTPROTO_RFCOMM:
+			s1 = my_strcpy( s1, "RFCOMM" );
 			break;
+		case BTPROTO_L2CAP:
+			s1 = my_strcpy( s1, "L2CAP" );
+			break;
+		default:
+			goto unknown_proto;
+		}
+		break;
+	default:
+unknown_proto:
+		s1 = my_itoa( s1, tv->s_proto, 10 );
+		break;
 	}
 	if( tv->l_addr.l ) {
 		switch( tv->s_domain ) {
 		case AF_INET:
+			r = ntohl( ((struct sockaddr_in *) tv->l_addr.a )->sin_addr.s_addr );
 			r = sprintf(
 				s1,
 				";LOCAL=%u.%u.%u.%u:%u",
-				IPPORT4(
-					((struct sockaddr_in *) tv->l_addr.a )->sin_addr.s_addr,
-					((struct sockaddr_in *) tv->l_addr.a )->sin_port
-				)
+				IPPORT4( r, ((struct sockaddr_in *) tv->l_addr.a )->sin_port )
 			);
 			s1 += (size_t ) r;
 			break;
@@ -3082,13 +3169,11 @@ PPCODE:
 	if( tv->r_addr.l ) {
 		switch( tv->s_domain ) {
 		case AF_INET:
+			r = ntohl( ((struct sockaddr_in *) tv->r_addr.a )->sin_addr.s_addr );
 			r = sprintf(
 				s1,
 				";REMOTE=%u.%u.%u.%u:%u",
-				IPPORT4(
-					((struct sockaddr_in *) tv->r_addr.a )->sin_addr.s_addr,
-					((struct sockaddr_in *) tv->r_addr.a )->sin_port
-				)
+				IPPORT4( r, ((struct sockaddr_in *) tv->r_addr.a )->sin_port )
 			);
 			s1 += (size_t ) r;
 			break;
