@@ -3,14 +3,16 @@
 my_global_t global;
 
 INLINE void my_thread_var_add( my_thread_var_t *tv ) {
-	size_t cascade = (size_t) tv % SC_TV_CASCADE;
-#ifdef SC_DEBUG
-	_debug( "add tv 0x%08x cascade %u\n", tv, cascade );
-#endif
+	size_t cascade;
 #ifdef USE_ITHREADS
 	MUTEX_INIT( &tv->thread_lock );
 #endif
 	GLOBAL_LOCK();
+	tv->id = ++ global.counter;
+	cascade = (size_t) tv->id % SC_TV_CASCADE;
+#ifdef SC_DEBUG
+	_debug( "add tv %lu cascade %lu\n", tv->id, cascade );
+#endif
 	if( global.first_thread[cascade] == NULL )
 		global.first_thread[cascade] = tv;
 	else {
@@ -24,7 +26,7 @@ INLINE void my_thread_var_add( my_thread_var_t *tv ) {
 INLINE void my_thread_var_free( my_thread_var_t *tv ) {
 	TV_LOCK( tv );
 #ifdef SC_DEBUG
-	_debug( "free tv 0x%08x socket %d\n", tv, tv->sock );
+	_debug( "free tv %lu socket %d\n", tv->id, tv->sock );
 #endif
 	Socket_close( tv->sock );
 	if( tv->s_domain == AF_UNIX ) {
@@ -40,10 +42,10 @@ INLINE void my_thread_var_free( my_thread_var_t *tv ) {
 }
 
 INLINE void my_thread_var_rem( my_thread_var_t *tv ) {
-	size_t cascade = (size_t) tv % SC_TV_CASCADE;
+	size_t cascade = (size_t) tv->id % SC_TV_CASCADE;
 	GLOBAL_LOCK();
 #ifdef SC_DEBUG
-	_debug( "removing thread_var 0x%08x\n", tv );
+	_debug( "removing thread_var %lu\n", tv->id );
 #endif
 	if( tv == global.last_thread[cascade] )
 		global.last_thread[cascade] = tv->prev;
@@ -59,28 +61,29 @@ INLINE void my_thread_var_rem( my_thread_var_t *tv ) {
 
 INLINE my_thread_var_t *my_thread_var_find( SV *sv ) {
 	size_t cascade;
-	register my_thread_var_t *tvf, *tvl, *tv;
+	my_thread_var_t *tvf, *tvl;
+	unsigned long id;
 	if( global.destroyed )
 		return NULL;
-	if( ! SvROK( sv ) || ! ( sv = SvRV( sv ) ) || ! SvIOK( sv ) )
+	if( ! SvROK( sv ) || ! (sv = SvRV( sv )) || ! SvIOK( sv ) )
 		return NULL;
-	tv = INT2PTR( my_thread_var_t *, SvIV( sv ) );
-	cascade = (size_t) tv % SC_TV_CASCADE;
+	id = (unsigned long) SvIV( sv );
+	cascade = (size_t) id % SC_TV_CASCADE;
 	GLOBAL_LOCK();
 	tvf = global.first_thread[cascade];
 	tvl = global.last_thread[cascade];
 	while( 1 ) {
 		if( tvl == NULL )
 			break;
-		if( tvl == tv )
+		if( tvl->id == id )
 			goto retl;
-		else if( tvf == tv )
+		if( tvf->id == id )
 			goto retf;
 		tvl = tvl->prev;
 		tvf = tvf->next;
 	}
 #ifdef SC_DEBUG
-	_debug( "tv 0x%08x NOT found\n", tv );
+	_debug( "tv %lu NOT found\n", id );
 #endif
 retf:
 	GLOBAL_UNLOCK();
@@ -177,7 +180,7 @@ INLINE int Socket_setaddr_INET( tv, host, port, use )
 	r = getaddrinfo( host, port != NULL ? port : "", &aih, &ail );
 	if( r != 0 ) {
 #ifdef SC_DEBUG
-		_debug( "getaddrinfo() failed %d\n", r );
+		_debug( "Socket_setaddr_INET getaddrinfo() failed %d\n", r );
 #endif
 #ifndef _WIN32
 		{

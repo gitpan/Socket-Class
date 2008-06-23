@@ -4,10 +4,10 @@ package Socket::Class::Const;
 #use strict;
 #use warnings;
 
-our( $VERSION, $WIN );
+our( $VERSION, $WIN, $AIX );
 
 BEGIN {
-	$VERSION = '1.22';
+	$VERSION = '1.23';
 	$WIN = $^O eq 'MSWin32';
 	$AIX = $^O eq 'aix';
 	# register global functions for export
@@ -34,6 +34,7 @@ our $SOCK_STREAM		= 1;
 our $SOCK_DGRAM			= 2;
 
 # ip protocols
+our $IPPROTO_IP 		= 0;
 our $IPPROTO_ICMP		= 1;
 our $IPPROTO_TCP		= 6;
 our $IPPROTO_UDP		= 17;
@@ -56,8 +57,9 @@ our $MSG_WAITALL		= $WIN ? 0x08 : 0x100;
 
 # socket options level
 our $SOL_SOCKET			= $WIN ? 0xffff : 1;
-our $SOL_TCP			= $IPPROTO_TCP;
-our $SOL_UDP			= $IPPROTO_UDP;
+our $SOL_IP				= 0;
+our $SOL_TCP			= 6;
+our $SOL_UDP			= 17;
 
 # socket options
 our $SO_DEBUG			= 1;
@@ -76,6 +78,12 @@ our $SO_SNDLOWAT		= $WIN ? 0x1003 : 19;
 our $SO_RCVTIMEO		= $WIN ? 0x1006 : 20;
 our $SO_SNDTIMEO		= $WIN ? 0x1005 : 21;
 our $SO_ACCEPTCON		= $WIN ? 0x0002 : 80;
+
+# ip options
+our $IP_TOS				= $WIN ? 3 : 1;
+our $IP_TTL				= $WIN ? 4 : 2;
+our $IP_HDRINCL			= $WIN ? 2 : 3;
+our $IP_OPTIONS			= $WIN ? 1 : 4;
 
 # tcp options
 our $TCP_NODELAY		= 1;
@@ -113,15 +121,16 @@ our @EXPORT_OK = qw(
 	$AF_UNSPEC $AF_UNIX $AF_INET $AF_INET6 $AF_BLUETOOTH
 	$PF_UNSPEC $PF_UNIX $PF_INET $PF_INET6 $PF_BLUETOOTH
 	$SOCK_STREAM $SOCK_DGRAM
-	$IPPROTO_ICMP $IPPROTO_TCP $IPPROTO_UDP
+	$IPPROTO_IP $IPPROTO_ICMP $IPPROTO_TCP $IPPROTO_UDP
 	$BTPROTO_RFCOMM $BTPROTO_L2CAP
 	$SOMAXCONN
 	$MSG_OOB $MSG_PEEK $MSG_DONTROUTE $MSG_CTRUNC $MSG_TRUNC $MSG_DONTWAIT
 	$MSG_WAITALL
-	$SOL_SOCKET $SOL_TCP $SOL_UDP
+	$SOL_SOCKET $SOL_IP $SOL_TCP $SOL_UDP
 	$SO_DEBUG $SO_TYPE $SO_ERROR $SO_DONTROUTE $SO_SNDBUF
 	$SO_RCVBUF $SO_OOBINLINE $SO_BROADCAST $SO_KEEPALIVE $SO_LINGER
 	$SO_RCVLOWAT $SO_SNDLOWAT $SO_RCVTIMEO $SO_SNDTIMEO $SO_ACCEPTCON
+	$IP_TOS $IP_TTL $IP_HDRINCL $IP_OPTIONS
 	$TCP_NODELAY
 	$SD_RECEIVE $SD_SEND $SD_BOTH
 	$SOS_INIT $SOS_BOUND $SOS_LISTEN $SOS_CONNECTED $SOS_SHUTDOWN $SOS_CLOSED

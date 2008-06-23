@@ -12,7 +12,7 @@ package Socket::Class;
 our( $VERSION );
 
 BEGIN {
-	$VERSION = '1.22';
+	$VERSION = '1.23';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -921,6 +921,19 @@ Returns number of bytes read, or undef on error.
 The error code can be retrieved with L<errno()|Socket::Class/errno>
 and the error string can be retrieved with L<error()|Socket::Class/error>. 
 
+B<Examples>
+
+  # read from socket until error
+  $data = '';
+  while( ! $sock->is_error ) {
+      if( $sock->is_readable( 100 ) ) {
+          $sock->read( $buffer, 4096 )
+              or last;
+          $data .= $buffer;
+      }
+  }
+  printf "received %d bytes\n", length( $data );
+
 
 =item B<print ( ... )>
 
@@ -1318,11 +1331,11 @@ B<Examples>
   $sock = Socket::Class->new( ... );
   
   # get linger
-  ( $l_onoff, $l_linger ) =
+  ($l_onoff, $l_linger) =
       $sock->get_option( $SOL_SOCKET, $SO_LINGER );
   
   # get rcv timeout
-  ( $tv_sec, $tv_usec ) =
+  ($tv_sec, $tv_usec) =
       $sock->get_option( $SOL_SOCKET, $SO_RCVTIMEO );
   # or in milliseconds
   $ms = $sock->get_option( $SOL_SOCKET, $SO_RCVTIMEO );
@@ -1389,7 +1402,7 @@ Returns a packed version of the given address.
 B<Examples>
 
   $paddr = $sock->pack_addr( 'localhost', 9999 );
-  ( $addr, $port ) = $sock->unpack_addr( $paddr );
+  ($addr, $port) = $sock->unpack_addr( $paddr );
 
 
 =item B<unpack_addr ( $paddr )>
@@ -1409,7 +1422,9 @@ Returns the unpacked version of the given address.
 B<Examples>
 
   $paddr = $sock->pack_addr( 'localhost', 9999 );
-  ( $addr, $port ) = $sock->unpack_addr( $paddr );
+  ($addr, $port) = $sock->unpack_addr( $paddr );
+  # in scalar context only the address part will return
+  $addr = $sock->unpack_addr( $paddr );
 
 
 =item B<get_hostname ()>
@@ -1793,8 +1808,8 @@ B<Examples>
   
   # watch all states and return within 1000 milliseconds
   $v = $sock->select( $r = 1, $w = 1, $e = 1, 1000 );
-  if( ! defined $v ) {
-      die $sock->error;
+  unless( defined $v ) {
+      die "select failed: " . $sock->error;
   }
   if( $e ) {
       # socket error
@@ -1929,7 +1944,7 @@ from the last occurred error.
       print 'Server running at ' . $server->local_addr .
           ' port ' . $server->local_port . "\n";
       while( $RUNNING ) {
-      	  $client = $server->accept();
+          $client = $server->accept();
           if( ! defined $client ) {
               # server is closed
               last;

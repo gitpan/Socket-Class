@@ -19,6 +19,7 @@ examples/inet_dgram_ping.pl
 examples/inet_nonblock_10clients.pl
 examples/ping_client.pl
 examples/ping_server.pl
+examples/traceroute.pl
 examples/unix_blocking.pl
 lib/Socket/Class/Async.pm
 lib/Socket/Class/Const.pm

@@ -129,8 +129,8 @@ sub response_thread {
 		last;
 	}
 	$client->wait( 50 );
-	$client->free();
-	threads->self->detach if $RUNNING;
+	#$client->free();
+	#threads->self->detach if $RUNNING;
 	return 1;
 }
 
@@ -153,8 +153,8 @@ sub client_thread {
 		last;
 	}
 	$client->wait( 50 );
-	$client->free();
-	threads->self->detach if $RUNNING;
+	#$client->free();
+	#threads->self->detach if $RUNNING;
 	return 1;
 }
 

@@ -85,7 +85,7 @@ PPCODE:
 	for( i = 0; i < SC_TV_CASCADE; i ++ ) {
 		for( tv = global.first_thread[i]; tv != NULL; tv = tv->next ) {
 #ifdef SC_DEBUG
-			_debug( "CLONE called for tv 0x%08X ref: %d\n", tv, tv->refcnt );
+			_debug( "CLONE called for tv %lu ref: %d\n", tv->id, tv->refcnt );
 #endif
 			tv->refcnt ++;
 		}
@@ -108,7 +108,7 @@ PPCODE:
 	if( (tv = my_thread_var_find( this )) == NULL )
 		XSRETURN_EMPTY;
 #ifdef SC_DEBUG
-	_debug( "DESTROY called for tv 0x%08x ref: %d\n", tv, tv->refcnt );
+	_debug( "DESTROY called for tv %lu ref: %d\n", tv->id, tv->refcnt );
 #endif
 	tv->refcnt --;
 	if( tv->refcnt < 0 ) {
@@ -143,16 +143,17 @@ PPCODE:
 	tv->s_proto = IPPROTO_TCP;
 	tv->timeout.tv_sec = 15;
 	/* read options */
-	for( i = 1; i < items - 1; i += 2 ) {
+	for( i = 1; i < items - 1; i ++ ) {
 		if( ! SvPOK( ST(i) ) )
 			continue;
 		key = SvPVx( ST(i), lkey );
-		if( strcmp( key, "domain" ) == 0 ) {
-			if( SvIOK( ST(i + 1) ) ) {
-				tv->s_domain = (int) SvIV( ST(i + 1) );
+		i ++;
+		if( strcmp( key, "domain" ) == 0 || strcmp( key, "family" ) == 0 ) {
+			if( SvIOK( ST(i) ) ) {
+				tv->s_domain = (int) SvIV( ST(i) );
 			}
-			else {
-				val = SvPVx( ST(i + 1), lval );
+			else if( SvPOK( ST(i) ) ) {
+				val = SvPVx( ST(i), lval );
 				tv->s_domain = Socket_domainbyname( val );
 			}
 			if( tv->s_domain == AF_UNIX ) {
@@ -163,20 +164,20 @@ PPCODE:
 			}
 		}
 		else if( strcmp( key, "type" ) == 0 ) {
-			if( SvIOK( ST(i + 1) ) ) {
-				tv->s_type = (int) SvIV( ST(i + 1) );
+			if( SvIOK( ST(i) ) ) {
+				tv->s_type = (int) SvIV( ST(i) );
 			}
-			else {
-				val = SvPVx( ST(i + 1), lval );
+			else if( SvPOK( ST(i) ) ) {
+				val = SvPVx( ST(i), lval );
 				tv->s_type = Socket_typebyname( val );
 			}
 		}
 		else if( strcmp( key, "proto" ) == 0 ) {
-			if( SvIOK( ST(i + 1) ) ) {
-				tv->s_proto = (int) SvIV( ST(i + 1) );
+			if( SvIOK( ST(i) ) ) {
+				tv->s_proto = (int) SvIV( ST(i) );
 			}
-			else {
-				val = SvPVx( ST(i + 1), lval );
+			else if( SvPOK( ST(i) ) ) {
+				val = SvPVx( ST(i), lval );
 				tv->s_proto = Socket_protobyname( val );
 			}
 			if( tv->s_proto == IPPROTO_UDP ) {
@@ -184,41 +185,57 @@ PPCODE:
 			}
 		}
 		else if( strcmp( key, "local_addr" ) == 0 ) {
-			la = SvPV( ST(i + 1), lval );
+			if( SvPOK( ST(i) ) ) {
+				la = SvPV( ST(i), lval );
+				if( lp == NULL )
+					lp = "";
+			}
 		}
 		else if( strcmp( key, "local_path" ) == 0 ) {
-			la = SvPV( ST(i + 1), lval );
-			tv->s_domain = AF_UNIX;
-			tv->s_proto = 0;
+			if( SvPOK( ST(i) ) ) {
+				la = SvPV( ST(i), lval );
+				tv->s_domain = AF_UNIX;
+				tv->s_proto = 0;
+			}
 		}
 		else if( strcmp( key, "local_port" ) == 0 ) {
-			lp = SvPV( ST(i + 1), lval );
+			if( SvPOK( ST(i) ) || SvIOK( ST(i) ) ) {
+				lp = SvPV( ST(i), lval );
+			}
 		}
 		else if( strcmp( key, "remote_addr" ) == 0 ) {
-			ra = SvPV( ST(i + 1), lval );
+			if( SvPOK( ST(i) ) ) {
+				ra = SvPV( ST(i), lval );
+			}
 		}
 		else if( strcmp( key, "remote_path" ) == 0 ) {
-			ra = SvPV( ST(i + 1), lval );
-			tv->s_domain = AF_UNIX;
-			tv->s_proto = 0;
+			if( SvPOK( ST(i) ) ) {
+				ra = SvPV( ST(i), lval );
+				tv->s_domain = AF_UNIX;
+				tv->s_proto = 0;
+			}
 		}
 		else if( strcmp( key, "remote_port" ) == 0 ) {
-			rp = SvPV( ST(i + 1), lval );
+			if( SvPOK( ST(i) ) || SvIOK( ST(i) ) ) {
+				rp = SvPV( ST(i), lval );
+			}
 		}
 		else if( strcmp( key, "listen" ) == 0 ) {
-			ln = (int) SvIV( ST(i + 1) );
+			ln = (int) SvIV( ST(i) );
+			if( ln < 0 )
+				ln = SOMAXCONN;
 		}
 		else if( strcmp( key, "blocking" ) == 0 ) {
-			bl = (int) SvIV( ST(i + 1) );
+			bl = (int) SvIV( ST(i) );
 		}
 		else if( strcmp( key, "broadcast" ) == 0 ) {
-			bc = (int) SvIV( ST(i + 1) );
+			bc = (int) SvIV( ST(i) );
 		}
 		else if( strcmp( key, "reuseaddr" ) == 0 ) {
-			rua = (int) SvIV( ST(i + 1) );
+			rua = (int) SvIV( ST(i) );
 		}
 		else if( strcmp( key, "timeout" ) == 0 ) {
-			tmo = SvNV( ST(i + 1) );
+			tmo = SvNV( ST(i) );
 		}
 	}
 	/* create the socket */
@@ -253,8 +270,16 @@ PPCODE:
 		case AF_INET6:
 		default:
 			i = Socket_setaddr_INET( tv, la, lp, ADDRUSE_LISTEN );
-			if( i != 0 ) {
-				global.last_errno = i;
+			if( i < 0 ) {
+#ifndef _WIN32
+				GLOBAL_ERROR( i, tv->last_error );
+#else
+				GLOBAL_ERRNO( i );
+#endif
+				goto error2;
+			}
+			else if( i != 0 ) {
+				GLOBAL_ERRNO( i );
 				goto error2;
 			}
 			break;
@@ -289,8 +314,16 @@ PPCODE:
 		case AF_INET6:
 		default:
 			i = Socket_setaddr_INET( tv, ra, rp, ADDRUSE_CONNECT );
-			if( i != 0 ) {
-				global.last_errno = i;
+			if( i < 0 ) {
+#ifndef _WIN32
+				GLOBAL_ERROR( i, tv->last_error );
+#else
+				GLOBAL_ERRNO( i );
+#endif
+				goto error2;
+			}
+			else if( i != 0 ) {
+				GLOBAL_ERRNO( i );
 				goto error2;
 			}
 			break;
@@ -326,7 +359,7 @@ PPCODE:
 #ifdef SC_DEBUG
 						_debug( "getsockopt SO_ERROR %d\n", i );
 #endif
-						global.last_errno = i;
+						GLOBAL_ERRNO( i );
 						goto error2;
 					}
 				}
@@ -334,7 +367,7 @@ PPCODE:
 #ifdef SC_DEBUG
 					_debug( "connect timed out %u\n", ETIMEDOUT );
 #endif
-					global.last_errno = ETIMEDOUT;
+					GLOBAL_ERRNO( ETIMEDOUT );
 					goto error2;
 				}	
 			}
@@ -342,7 +375,7 @@ PPCODE:
 #ifdef SC_DEBUG
 				_debug( "connect failed %d\n", i );
 #endif
-				global.last_errno = i;
+				GLOBAL_ERRNO( i );
 				goto error2;
 			}
 		}
@@ -361,22 +394,23 @@ PPCODE:
 			goto error;
 		tv->non_blocking = 1;
 	}
+	GLOBAL_ERROR( 0, "" );
+	my_thread_var_add( tv );
 	/* create the class */
-	sv = sv_2mortal( newSViv( PTR2IV( tv ) ) );
+	sv = sv_2mortal( newSViv( (IV) tv->id ) );
 	key = SvPV( class, lkey );
 	Newx( tv->classname, lkey + 1, char );
 	Copy( key, tv->classname, lkey + 1, char );
 #ifdef SC_DEBUG
-	_debug( "bless socket %d to %s\n", tv->sock, key );
+	_debug( "bless socket %d to class %s\n", tv->sock, key );
 #endif
-	hv = gv_stashpv( key, 0 );
+	hv = gv_stashpv( key, FALSE );
 	ST(0) = sv_2mortal( sv_bless( newRV( sv ), hv ) );
-	my_thread_var_add( tv );
-	global.last_errno = 0;
-	global.last_error[0] = '\0';
 	XSRETURN( 1 );
 error:
+	GLOBAL_LOCK();
 	GLOBAL_ERRNOLAST();
+	GLOBAL_UNLOCK();
 error2:
 	XSRETURN_EMPTY;
 
@@ -756,9 +790,6 @@ PPCODE:
 		}
 	}
 	Newxz( tv2, 1, my_thread_var_t );
-#ifdef SC_DEBUG
-	_debug( "accepting socket %d tv 0x%08x %u:%u\n", s, tv2, tv->l_addr.l, addr.l );
-#endif
 	tv2->s_domain = tv->s_domain;
 	tv2->s_type = tv->s_type;
 	tv2->s_proto = tv->s_proto;
@@ -767,10 +798,13 @@ PPCODE:
 	Copy( &addr, &tv2->r_addr, MYSASIZE( addr ), BYTE );
 	tv2->l_addr.l = SOCKADDR_SIZE_MAX;
 	getsockname( s, (struct sockaddr *) tv2->l_addr.a, &tv2->l_addr.l );
-	sv = sv_2mortal( newSViv( PTR2IV( tv2 ) ) );
-	hv = gv_stashpv( tv->classname, 0 );
-	ST(0) = sv_2mortal( sv_bless( newRV( sv ), hv ) );
 	my_thread_var_add( tv2 );
+#ifdef SC_DEBUG
+	_debug( "accepted socket %d tv %lu\n", s, tv2->id );
+#endif
+	sv = sv_2mortal( newSViv( (IV) tv2->id ) );
+	hv = gv_stashpv( tv->classname, FALSE );
+	ST(0) = sv_2mortal( sv_bless( newRV( sv ), hv ) );
 	TV_UNLOCK( tv );
 	XSRETURN( 1 );
 
@@ -1520,15 +1554,19 @@ PPCODE:
 			l2a = (SOCKADDR_L2CAP *) saddr->a;
 			r = my_ba2str( &l2a->bt_bdaddr, tmp );
 			XPUSHs( sv_2mortal( newSVpv( tmp, r ) ) );
-			XPUSHs( sv_2mortal( newSViv( l2a->bt_port ) ) );
+			if( GIMME_V == G_ARRAY ) {
+				XPUSHs( sv_2mortal( newSViv( l2a->bt_port ) ) );
+			}
 		}
 		break;
 	case AF_INET:
 		r = ntohl( ((struct sockaddr_in *) saddr->a )->sin_addr.s_addr );
 		r = sprintf( tmp, "%u.%u.%u.%u", IP4( r ) );
 		XPUSHs( sv_2mortal( newSVpv( tmp, r ) ) );
-		XPUSHs( sv_2mortal( newSViv(
-			ntohs( ((struct sockaddr_in *) saddr->a )->sin_port ) ) ) );
+		if( GIMME_V == G_ARRAY ) {
+			XPUSHs( sv_2mortal( newSViv(
+				ntohs( ((struct sockaddr_in *) saddr->a )->sin_port ) ) ) );
+		}
 		break;
 	case AF_INET6:
 		s1 = (char *) &((struct sockaddr_in6 *) saddr->a )->sin6_addr;
@@ -1536,8 +1574,10 @@ PPCODE:
 			IP6( (uint16_t *) s1 )
 		);
 		XPUSHs( sv_2mortal( newSVpv( tmp, r ) ) );
-		XPUSHs( sv_2mortal( newSViv(
-			ntohs( ((struct sockaddr_in6 *) saddr->a )->sin6_port ) ) ) );
+		if( GIMME_V == G_ARRAY ) {
+			XPUSHs( sv_2mortal( newSViv(
+				ntohs( ((struct sockaddr_in6 *) saddr->a )->sin6_port ) ) ) );
+		}
 		break;
 	}
 	TV_UNLOCK( tv );
@@ -1589,16 +1629,11 @@ PPCODE:
 		*/
 		r = getaddrinfo( s1, "", &aih, &ail );
 		if( r != 0 ) {
-#ifdef SC_DEBUG
-			_debug( "getaddrinfo() failed %d\n", r );
-#endif
-			TV_ERRNO( tv, r );
 #ifndef _WIN32
-			{
-				const char *s1 = gai_strerror( r );
-				strncpy( tv->last_error, s1, sizeof( tv->last_error ) );
-			}
+			const char *s1 = gai_strerror( r );
+			strncpy( tv->last_error, s1, sizeof(tv->last_error) );
 #endif
+			tv->last_errno = r;
 			ST(0) = &PL_sv_undef;
 			goto exit;
 		}
@@ -1614,14 +1649,9 @@ PPCODE:
 		NI_NUMERICSERV | NI_NAMEREQD
 	);
 	if( r != 0 ) {
-#ifdef SC_DEBUG
-		_debug( "getnameinfo failed %d\n", r );
-#endif
 #ifndef _WIN32
-		{
-			const char *s1 = gai_strerror( r );
-			strncpy( tv->last_error, s1, sizeof( tv->last_error ) );
-		}
+		const char *s1 = gai_strerror( r );
+		strncpy( tv->last_error, s1, sizeof( tv->last_error ) );
 #endif
 		tv->last_errno = r;
 		ST(0) = &PL_sv_undef;
@@ -1725,7 +1755,7 @@ PPCODE:
 	if( (tv = my_thread_var_find( this )) == NULL )
 		XSRETURN_EMPTY;
 	TV_LOCK( tv );
-	sname = SvPVx( name, lname );
+	sname = SvPV( name, lname );
 #ifndef SC_OLDNET
 	memset( &aih, 0, sizeof( struct addrinfo ) );
 	/*
@@ -1735,10 +1765,11 @@ PPCODE:
 	*/
 	r = getaddrinfo( sname, "", &aih, &ail );
 	if( r != 0 ) {
-#ifdef SC_DEBUG
-		_debug( "getaddrinfo() failed %d\n", r );
+#ifndef _WIN32
+		const char *s1 = gai_strerror( r );
+		strncpy( tv->last_error, s1, sizeof( tv->last_error ) );
 #endif
-		TV_ERRNO( tv, r );
+		tv->last_errno = r;
 		ST(0) = &PL_sv_undef;
 		goto _exit;		
 	}
@@ -1757,6 +1788,7 @@ PPCODE:
 		break;
 	default:
 		ST(0) = &PL_sv_undef;
+		break;
 	}
 	freeaddrinfo( ail );
 	TV_ERRNO( tv, 0 );
@@ -2000,8 +2032,7 @@ PPCODE:
 		TV_UNLOCK( tv );
 	}
 	else {
-		global.last_errno = 0;
-		global.last_error[0] = '\0';
+		GLOBAL_ERROR( 0, "" );
 		GLOBAL_UNLOCK();
 	}
 
@@ -2136,8 +2167,7 @@ PPCODE:
 		TV_UNLOCK( tv );
 	}
 	else {
-		global.last_errno = 0;
-		global.last_error[0] = '\0';
+		GLOBAL_ERROR( 0, "" );
 		GLOBAL_UNLOCK();
 	}
 	ST(0) = sv_2mortal( newSVpvn( host, strlen( host ) ) );
@@ -2395,7 +2425,7 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * set_option( this, level, optname, value, ... )
+# * set_option( this, level, optname, value )
 # *****************************************************************************/
 
 void
@@ -2458,7 +2488,7 @@ PPCODE:
 _chk:
 	if( SvIOK( value ) ) {
 		r = (int) SvIV( value );
-		val = &r;
+		val = (void *) &r;
 		len = sizeof( int );
 	}
 	else {

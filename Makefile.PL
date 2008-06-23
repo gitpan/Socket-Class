@@ -4,7 +4,7 @@ use Config;
 
 my %os_supported = (
 	'linux' => 1, 'MSWin32' => 1, 'darwin' => 1, 'cygwin' => 1, 'aix' => 1,
-	'solaris' => 1
+	'solaris' => 1, 'os390' => 1
 );
 
 if( ! $os_supported{$^O} ) {

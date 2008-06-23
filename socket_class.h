@@ -314,6 +314,7 @@ typedef struct st_my_sockaddr {
 
 typedef struct st_my_thread_var {
 	struct st_my_thread_var		*prev, *next;
+	unsigned long				id;
 	SOCKET						sock;
 	int							s_domain;
 	int							s_type;
@@ -341,6 +342,7 @@ typedef struct st_my_global {
 	long						last_errno;
 	char						last_error[256];
 	int							destroyed;
+	unsigned long				counter;
 #ifdef USE_ITHREADS
 	perl_mutex					thread_lock;
 #endif

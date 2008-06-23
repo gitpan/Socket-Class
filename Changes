@@ -1,5 +1,12 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.23
+    - added "traceroute.pl" to examples
+    - changed storage of internal data
+    - fixed error handling in new()
+    - fixed test script "t/4_threads.t"
+    - fixed functions "get_hostname" and "get_hostaddr"
+
 version 1.22
     - added function "available"
     - changed prototype of function "write"
