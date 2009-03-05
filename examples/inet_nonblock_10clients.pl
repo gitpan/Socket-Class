@@ -1,4 +1,7 @@
 #!/usr/bin/perl
+BEGIN {
+	unshift @INC, 'blib/lib', 'blib/arch';
+}
 
 use threads;
 use threads::shared;
@@ -6,9 +9,13 @@ use threads::shared;
 use Time::HiRes;
 use Socket::Class;
 
-sub say { print @_, "\n"; }
-
 our $RUNNING : shared = 1;
+our $LockSay : shared;
+
+sub say {
+	lock( $LockSay );
+	print @_, "\n";
+}
 
 $server = Socket::Class->new(
 	'local_addr' => '127.0.0.1',
@@ -17,8 +24,8 @@ $server = Socket::Class->new(
 ) or die Socket::Class->error;
 threads->create( \&server_thread, $server );
 
-our $client_count = 0;
-our $client_ts = &microtime();
+our $packet_count = 0;
+our $client_ts;
 
 for $i( 1 .. 10 ) {
 	$client = Socket::Class->new(
@@ -32,10 +39,12 @@ for $i( 1 .. 10 ) {
 	$client->write( "S" x 512 );
 }
 
-sleep( 20 );
+sleep( 10 );
 $RUNNING = 0;
 foreach $thread( threads->list() ) {
-	$thread->join();
+	eval {
+		$thread->join();
+	};
 }
 
 1;
@@ -43,8 +52,8 @@ foreach $thread( threads->list() ) {
 sub server_thread {
 	my( $sock ) = @_;
 	my( $client, $buf );
-	say "\nstarting server thread";
-	say "\nServer running at " . $sock->local_addr . ' port ' . $sock->local_port;
+	say "starting server thread";
+	say "Server running at " . $sock->local_addr . ' port ' . $sock->local_port;
 	while( $RUNNING ) {
 		if( $client = $sock->accept() ) {
 			threads->create( \&response_thread, $client );
@@ -53,15 +62,16 @@ sub server_thread {
 			$sock->wait( 100 );
 		}
 	}
-	say "\nclosing server thread";
+	say "closing server thread";
 	$sock->free();
 }
 
 sub response_thread {
 	my( $sock ) = @_;
-	my( $got, $buf, $trhd );
+	my( $got, $buf, $trhd, $tid );
 	$trhd = threads->self;
-	say "\nstarting response thread";
+	$tid = $trhd->tid;
+	say "starting response thread $tid";
 	say "Incoming connection from " . $sock->remote_addr . ":" . $sock->remote_port;
 	$sock->set_blocking( 0 );
 	while( $RUNNING ) {
@@ -72,13 +82,13 @@ sub response_thread {
 			last;
 		}
 		elsif( $got == 0 ) {
-			$trhd->yield;
+			#$trhd->yield;
 			$sock->wait( 1 );
 			next;
 		}
 		$sock->write( "C" x 512 );
 	}
-	say "\nclosing response thread\n";
+	say "closing response thread $tid";
 	$sock->free();
 	threads->self->detach() if $RUNNING;
 	return 1;
@@ -87,10 +97,10 @@ sub response_thread {
 sub client_thread {
 	my( $sock ) = @_;
 	my( $got, $buf, $trhd, $tid );
-	say "\nstarting client thread";
-	$client_ts = &microtime();
 	$trhd = threads->self;
 	$tid = $trhd->tid;
+	say "starting client thread $tid";
+	$client_ts = &Time::HiRes::time();
 	while( $RUNNING ) {
 		$got = $sock->read( $buf, 4096 );
 		if( ! defined $got ) {
@@ -103,20 +113,15 @@ sub client_thread {
 			$sock->wait( 1 );
 			next;
 		}
-		$client_count ++;
-		if( ($client_count % 100) == 0 ) {
-			my $ac = sprintf( '%0.1f', $client_count / (&microtime() - $client_ts) );
-			print "$tid got $client_count packets a $got bytes ($ac p/s)\n";
+		$packet_count ++;
+		if( ($packet_count % 300) == 0 ) {
+			my $ac = sprintf( '%0.1f', $packet_count / (&Time::HiRes::time() - $client_ts) );
+			say "$tid got $packet_count packets a $got bytes ($ac p/s)";
 		}
 		$sock->write( "S" x 512 );
 	}
-	say "\nclosing client thread";
+	say "closing client thread $tid";
 	$sock->free();
 	threads->self->detach() if $RUNNING;
 	return 1;
-}
-
-sub microtime {
-	my( $sec, $usec ) = &Time::HiRes::gettimeofday();
-	return $sec + $usec / 1000000;
 }

@@ -1,4 +1,5 @@
 Bluetooth.xs
+c_module.h
 Changes
 Class.pm
 Class.xs
@@ -7,6 +8,8 @@ MANIFEST
 README
 sc_bluez.c
 sc_bluez.h
+sc_mod_def.c
+sc_mod_def.h
 sc_ws2bth.c
 sc_ws2bth.h
 socket_class.c
@@ -22,10 +25,14 @@ examples/ping_server.pl
 examples/traceroute.pl
 examples/unix_blocking.pl
 lib/Socket/Class/Async.pm
-lib/Socket/Class/Const.pm
+lib/Socket/Class/Const2.pm
 t/0_basic.t
 t/1_inet.t
 t/2_inet6.t
 t/3_unix.t
 t/4_threads.t
+xs/Makefile.PL
+xs/sc_const/Const.pm
+xs/sc_const/Const.xs
+xs/sc_const/Makefile.PL
 META.yml                                 Module meta-data (added by MakeMaker)

@@ -12,7 +12,7 @@ package Socket::Class;
 our( $VERSION );
 
 BEGIN {
-	$VERSION = '1.23';
+	$VERSION = '1.99_10';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -27,7 +27,7 @@ sub import {
 	@_ or return;
 	$Socket::Class::Const::VERSION
 		or require Socket::Class::Const;
-	&Exporter::export( 'Socket::Class::Const', $callpkg, @_ );
+	&Socket::Class::Const::export( $callpkg, @_ );
 }
 
 sub printf {
@@ -67,7 +67,7 @@ Socket::Class - A class to communicate with sockets
 
 Socket::Class provides a simple, fast and efficient way to communicate with
 sockets.
-It operates outside of Perl's IO and socket layer. It can be used as a
+It operates outside of Perl IO and socket layer. It can be used as a
 B<replacement to IO::Socket>.
 Little parts of Bluetooth technology has been integrated. Please see below.
 
@@ -86,15 +86,15 @@ B<Main Functions>
 
 =item
 
-L<accept|Socket::Class/accept>,
-L<bind|Socket::Class/bind>,
-L<close|Socket::Class/close>,
-L<connect|Socket::Class/connect>,
-L<free|Socket::Class/free>,
-L<new|Socket::Class/new>,
-L<listen|Socket::Class/listen>,
-L<reconnect|Socket::Class/reconnect>,
-L<shutdown|Socket::Class/shutdown>
+C<accept>,
+C<bind>,
+C<close>,
+C<connect>,
+C<free>,
+C<new>,
+C<listen>,
+C<reconnect>,
+C<shutdown>
 
 =back
 
@@ -104,17 +104,17 @@ B<Sending and Receiving>
 
 =item
 
-L<print|Socket::Class/print>,
-L<printf|Socket::Class/printf>,
-L<read|Socket::Class/read>,
-L<readline|Socket::Class/readline>,
-L<recv|Socket::Class/recv>,
-L<recvfrom|Socket::Class/recvfrom>,
-L<say|Socket::Class/say>,
-L<send|Socket::Class/send>,
-L<sendto|Socket::Class/sendto>,
-L<write|Socket::Class/write>,
-L<writeline|Socket::Class/writeline>
+C<print>,
+C<printf>,
+C<read>,
+C<readline>,
+C<recv>,
+C<recvfrom>,
+C<say>,
+C<send>,
+C<sendto>,
+C<write>,
+C<writeline>
 
 =back
 
@@ -124,18 +124,18 @@ B<Address Functions>
 
 =item
 
-L<get_hostaddr|Socket::Class/get_hostaddr>,
-L<get_hostname|Socket::Class/get_hostname>,
-L<getaddrinfo|Socket::Class/getaddrinfo>,
-L<getnameinfo|Socket::Class/getnameinfo>,
-L<local_addr|Socket::Class/local_addr>,
-L<local_path|Socket::Class/local_path>,
-L<local_port|Socket::Class/local_port>,
-L<pack_addr|Socket::Class/pack_addr>,
-L<remote_addr|Socket::Class/remote_addr>,
-L<remote_path|Socket::Class/remote_path>,
-L<remote_port|Socket::Class/remote_port>,
-L<unpack_addr|Socket::Class/unpack_addr>
+C<get_hostaddr>,
+C<get_hostname>,
+C<getaddrinfo>,
+C<getnameinfo>,
+C<local_addr>,
+C<local_path>,
+C<local_port>,
+C<pack_addr>,
+C<remote_addr>,
+C<remote_path>,
+C<remote_port>,
+C<unpack_addr>
 
 =back
 
@@ -145,22 +145,22 @@ B<Socket Options>
 
 =item
 
-L<get_blocking|Socket::Class/get_blocking>,
-L<get_broadcast|Socket::Class/get_broadcast>,
-L<get_option|Socket::Class/get_option>,
-L<get_rcvbuf_size|Socket::Class/get_rcvbuf_size>,
-L<get_reuseaddr|Socket::Class/get_reuseaddr>,
-L<get_sndbuf_size|Socket::Class/get_sndbuf_size>,
-L<get_timeout|Socket::Class/get_timeout>,
-L<get_tcp_nodelay|Socket::Class/get_tcp_nodelay>,
-L<set_blocking|Socket::Class/set_blocking>,
-L<set_broadcast|Socket::Class/set_broadcast>,
-L<set_option|Socket::Class/set_option>,
-L<set_rcvbuf_size|Socket::Class/set_rcvbuf_size>,
-L<set_reuseaddr|Socket::Class/set_reuseaddr>,
-L<set_sndbuf_size|Socket::Class/set_sndbuf_size>,
-L<set_timeout|Socket::Class/set_timeout>,
-L<set_tcp_nodelay|Socket::Class/set_tcp_nodelay>
+C<get_blocking>,
+C<get_broadcast>,
+C<get_option>,
+C<get_rcvbuf_size>,
+C<get_reuseaddr>,
+C<get_sndbuf_size>,
+C<get_timeout>,
+C<get_tcp_nodelay>,
+C<set_blocking>,
+C<set_broadcast>,
+C<set_option>,
+C<set_rcvbuf_size>,
+C<set_reuseaddr>,
+C<set_sndbuf_size>,
+C<set_timeout>,
+C<set_tcp_nodelay>
 
 =back
 
@@ -170,16 +170,16 @@ B<Miscellaneous Functions>
 
 =item
 
-L<available|Socket::Class/available>,
-L<fileno|Socket::Class/fileno>,
-L<handle|Socket::Class/handle>,
-L<is_readable|Socket::Class/is_readable>,
-L<is_writable|Socket::Class/is_writable>,
-L<select|Socket::Class/select>,
-L<sleep|Socket::Class/sleep>,
-L<state|Socket::Class/state>,
-L<to_string|Socket::Class/to_string>,
-L<wait|Socket::Class/wait>
+C<available>,
+C<fileno>,
+C<handle>,
+C<is_readable>,
+C<is_writable>,
+C<select>,
+C<sleep>,
+C<state>,
+C<to_string>,
+C<wait>
 
 =back
 
@@ -189,9 +189,9 @@ B<Error Handling>
 
 =item
 
-L<errno|Socket::Class/errno>,
-L<error|Socket::Class/error>,
-L<is_error|Socket::Class/is_error>
+C<errno>,
+C<error>,
+C<is_error>
 
 =back
 
@@ -406,8 +406,7 @@ be allowed. Default is $SD_SEND.
 B<Return Values>
 
 Returns a true value on succes or undef on failure.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -465,8 +464,7 @@ The I<$port> parameter designates the port or channel on the local host.
 B<Return Values>
 
 Returns a true value on succes or undef on failure.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -491,8 +489,7 @@ so that retries may succeed.
 B<Return Values>
 
 Returns a true value on succes or undef on failure.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -514,9 +511,9 @@ set_blocking(), 0 will be returned.
 B<Return Values>
 
 Returns a new socket class on succes or 0 on non-blocking mode and no new
-connection becomes available or UNDEF on failure. The error code can be
-retrieved with L<errno()|Socket::Class/errno> and the error string can
-be retrieved with L<error()|Socket::Class/error>. 
+connection becomes available or UNDEF on failure.
+Use C<errno()> and C<error()> to retrieve the error code and message. 
+
 
 B<Examples>
 
@@ -588,8 +585,7 @@ Optionally timeout in milliseconds as floating point number.
 B<Return Values>
 
 Returns a TRUE value on succes or UNDEF on failure.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -605,8 +601,7 @@ reconnects the socket to the connection previously made.
 B<Return Values>
 
 Returns a true value on succes or undef on failure.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -658,8 +653,7 @@ The value of I<$flags> can be any combination of the following:
 B<Return Values>
 
 Returns the number of bytes sent or undef if an error occured.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -710,8 +704,7 @@ The value of I<$flags> can be any combination of the following:
 B<Return Values>
 
 Returns the number of bytes received or undef on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<See Also>
 
@@ -749,8 +742,7 @@ The value of I<$flags> can be any combination of the following:
 B<Return Values>
 
 Returns the bytes sent to the remote host or undef on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -812,8 +804,7 @@ B<Return Values>
 
 Returns a packed address of the sender or 0 on non-blocking mode and no data
 becomes available or undef on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -877,8 +868,7 @@ B<Return Values>
 
 Returns the number of bytes successfully written to the socket or UNDEF on
 error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Notes>
 
@@ -918,8 +908,7 @@ The maximum number of bytes read is specified by the length parameter.
 B<Return Values>
 
 Returns number of bytes read, or undef on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -943,8 +932,7 @@ B<Return Values>
 
 Returns the number of bytes successfully written to the socket, or undef on
 error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -966,8 +954,7 @@ B<Return Values>
 
 Returns the number of bytes successfully written to the socket or UNDEF on
 error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -989,8 +976,7 @@ B<Return Values>
 
 Returns the number of bytes successfully written to the socket, or undef on
 error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -1004,8 +990,7 @@ Reads characters from the socket and stops at \n, \r or \0.
 B<Return Values>
 
 Returns a string value, or undef on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =back
@@ -1027,8 +1012,7 @@ On 1 set blocking mode, on 0 set non-blocking mode.
 B<Return Values>
 
 Return a true value on succes, or undef on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<get_blocking ()>
@@ -1039,8 +1023,7 @@ B<Return Values>
 
 Return a TRUE value on blocking mode, or FALSE on non-blocking mode,
 or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<set_reuseaddr ( [$int] )>
@@ -1056,8 +1039,7 @@ On 1 enable reusaddr, on 0 disable reusaddr.
 B<Return Values>
 
 Return a TRUE value on succes or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<get_reuseaddr ()>
@@ -1067,8 +1049,7 @@ Returns the current value of SO_REUSEADDR.
 B<Return Values>
 
 Return the value of SO_REUSEADDR or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<set_broadcast ( [$int] )>
@@ -1084,8 +1065,7 @@ On 1 enable reusaddr, on 0 disable reusaddr.
 B<Return Values>
 
 Return a TRUE value on succes or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<get_broadcast ()>
@@ -1095,8 +1075,7 @@ Returns the current value of SO_BROADCAST.
 B<Return Values>
 
 Return the value of SO_BROADCAST or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<set_rcvbuf_size ( [$size] )>
@@ -1112,8 +1091,7 @@ The size of the receive buffer.
 B<Return Values>
 
 Return a TRUE value on succes or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<get_rcvbuf_size ()>
@@ -1123,8 +1101,7 @@ Returns the current value of SO_RCVBUF.
 B<Return Values>
 
 Return the value of SO_RCVBUF or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<set_sndbuf_size ( [$size] )>
@@ -1140,8 +1117,7 @@ The size of the send buffer.
 B<Return Values>
 
 Return a TRUE value on succes or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<get_sndbuf_size ()>
@@ -1151,8 +1127,7 @@ Returns the current value of SO_SNDBUF.
 B<Return Values>
 
 Return the value of SO_SNDBUF or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<set_timeout ( [$ms] )>
@@ -1168,8 +1143,7 @@ The timeout in milliseconds as floating point number.
 B<Return Values>
 
 Return a TRUE value on succes or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<get_timeout ()>
@@ -1179,8 +1153,7 @@ Returns the current timeout.
 B<Return Values>
 
 Return the timeout in milliseconds or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<set_tcp_nodelay ( [$int] )>
@@ -1196,8 +1169,7 @@ On 1 disable the naggle algorithm, on 0 enable it.
 B<Return Values>
 
 Return a TRUE value on succes or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<get_tcp_nodelay ()>
@@ -1207,8 +1179,7 @@ Returns the current value of TCP_NODELAY.
 B<Return Values>
 
 Return the value of TCP_NODELAY or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<set_option ( $level, $optname, $optval, ... )>
@@ -1238,8 +1209,7 @@ and are packed in the right format.
 B<Return Values>
 
 Return a TRUE value on succes or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -1321,8 +1291,7 @@ Returns the value of the given option, or UNDEF on error.
 If the size of the value equals the size of int the value will be unpacked as
 integer.
 For SO_LINGER, SO_RCVTIMEO and SO_SNDTIMEO the value will be unpacked also.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -1446,8 +1415,7 @@ If no address is specified the remote address of the socket is used.
 B<Return Values>
 
 Returns the first hostname found, or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -1478,8 +1446,7 @@ The host name as a string.
 B<Return Values>
 
 Returns the address of the host, or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -1505,31 +1472,30 @@ dotted-decimal IPv4 address or an IPv6 hex address.
 
 I<$service>
 
-A service name or port number, or undef if it is unused.
+A service name or port number, or undef to get all services.
 
 I<$family>
 
-The address family as name or number, or undef if it is unused.
+The address family as name or number, or undef to get all families.
 
 I<$proto>
 
-The protocol type as name or number, or undef if it is unused.
+The protocol type as name or number, or undef to get all protocols.
 
 I<$type>
 
-The socket type as name or number, or undef if it is unused.
+The socket type as name or number, or undef to get all socket types.
 
 I<$flags>
 
 Flags that indicate options used.
-See also L<getaddrinfo() flags|Socket::Class::Const/getaddrinfo()_flags>
-in L<Socket::Class::Const|Socket::Class::Const>
+See L<getaddrinfo() flags|Socket::Class::Const/"Flags for getaddrinfo()">
+in the L<Socket::Class::Const|Socket::Class::Const> module
 
 B<Return Values>
 
 Returns an array of hashes with address information, or undef on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 Address information structure:
 
@@ -1601,15 +1567,14 @@ A packed host address. See also C<pack_addr()>, C<getaddrinfo()>
 I<$flags>
 
 A value used to customize processing of the I<getnameinfo> function.
-See also L<getnameinfo() flags|Socket::Class::Const/getnameinfo()_flags>
-in L<Socket::Class::Const|Socket::Class::Const>
+See L<getnameinfo() flags|Socket::Class::Const/Flags for getnameinfo()>
+in the L<Socket::Class::Const|Socket::Class::Const> module
 
 B<Return Values>
 
 Returns the hostname in scalar context, or hostname and service in array
 context, or undef on error. 
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Examples>
 
@@ -1650,14 +1615,12 @@ Gets the amount of data that is available to be read.
 B<Return Values>
 
 Returns the number of bytes that is available to be read, or undef on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Remarks>
 
-On blocking sockets the function can block indefinitely.
-You should call L<is_readable()|Socket::Class/is_readable> before running this
-function.
+On blocking sockets the function can block infinitely. In this case you
+should call C<is_readable()> before running the function.
 
 B<Examples>
 
@@ -1687,8 +1650,7 @@ If the value is undef (no timeout), I<is_readable()> can block indefinitely.
 B<Return Values>
 
 Return 1 if the socket is readable, or 0 if it is not, or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<is_writable ( [$timeout] )>
@@ -1707,8 +1669,7 @@ If the value is undef (no timeout), I<is_writable()> can block indefinitely.
 B<Return Values>
 
 Return 1 if the socket is writable, or 0 if it is not, or UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 
 =item B<select ( [$read [, $write [, $except [, $timeout]]]] )>
@@ -1746,8 +1707,7 @@ B<Return Values>
 
 Returns a number between 0 to 3 which indicates the parameters set to TRUE, or
 UNDEF on error.
-The error code can be retrieved with L<errno()|Socket::Class/errno>
-and the error string can be retrieved with L<error()|Socket::Class/error>. 
+Use C<errno()> and C<error()> to retrieve the error code and message. 
 
 B<Remarks>
 
@@ -1867,7 +1827,7 @@ B<Parameters>
 
 I<$ms>
 
-The number of milliseconds to sleep.
+The number of milliseconds to sleep as floating point number.
 
 
 =back
@@ -1913,10 +1873,11 @@ from the last occurred error.
       'reuseaddr' => 1,
   ) or die Socket::Class->error;
   
-  # catch interrupt signals to provide clean shutdown
+  # catch interrupt signals for a clean shutdown
   $SIG{'INT'} = \&quit;
   #$SIG{'TERM'} = \&quit;
   
+  # create the server thread
   threads->create( \&server_thread, $Server );
   
   while( $RUNNING ) {
@@ -1932,7 +1893,9 @@ from the last occurred error.
       my( $thread );
       $RUNNING = 0;
       foreach $thread( threads->list ) {
-          $thread->join();
+          eval {
+              $thread->join();
+          };
       }
       $Server->free();
       exit( 0 );
@@ -1989,9 +1952,57 @@ from the last occurred error.
       return 1;
   }
 
+=head1 XS / C API
+
+The module provides a C interface for extension writers.
+
+B<Example XS>
+
+=for formatter cpp
+
+  #include <Socket/Class/c_module.h>
+  
+  /* global pointer to the socket class interface */
+  mod_sc_t *g_mod_sc;
+  
+  MODULE = MyModule		PACKAGE = MyModule
+  
+  BOOT:
+  {
+      SV **psv;
+      psv = hv_fetch(PL_modglobal, "Socket::Class", 13, 0);
+      if (psv == NULL)
+          croak("Socket::Class 2.0 or higher is required");
+      g_mod_sc = INT2PTR(mod_sc_t *, SvIV(*psv));
+  }
+  
+  void
+  test()
+  PREINIT:
+      sc_t *socket;
+      char *args[4];
+      int r;
+      SV *sv;
+  PPCODE:
+      args[0] = "local_port";
+      args[1] = "0";
+      args[2] = "listen";
+      args[3] = "10";
+      r = g_mod_sc->sc_create(args, 4, &socket);
+      if (r != SC_OK)
+          croak(g_mod_sc->sc_get_error(NULL));
+      g_mod_sc->sc_create_class(socket, NULL, &sv);
+      ST(0) = sv_2mortal(sv);
+      XSRETURN(1);
+
+=for formatter perl
+
+See <sitearch>/auto/Socket/Class/c_module.h for the definition
+and look to the source code of Class.xs for an implementation.
+
 =head1 AUTHORS
 
-Written and maintained by Christian Mueller
+Navalla org., Christian Mueller, L<http://www.navalla.org/>
 
 =head1 COPYRIGHT
 

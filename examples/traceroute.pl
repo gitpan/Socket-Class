@@ -35,7 +35,8 @@ if( $addr eq $ARGV[0] ) {
 	$ARGV[0] = $host->get_hostname( $addr ) || $addr;
 }
 printf "trace route to %s [%s]\n\n", $ARGV[0], $addr;
-$iep = $host->pack_addr( $addr );
+$iep = $host->pack_addr( $addr )
+	or die $host->error;
 
 $packet = ICMP->new();
 $packet->{'type'} = 0x08;

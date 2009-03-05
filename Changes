@@ -1,5 +1,18 @@
 Revision history for Perl extension Socket::Class.
 
+version 1.99_01 (toward 2.0 release)
+    - added a XS / C module interface
+	- changed perl type of the class from scalar to hashref (for sub classing)
+	  .. key field '_sc_' is used to identify the class internally
+	- moved the constant module to XS
+	- constants can now be exported as const sub or as variables like before
+	- incompatibility changes in socket state constants
+      .. renamed state constants from SOS_* to SC_STATE_*
+
+version 1.24 (unreleased)
+    - fixed call of getaddrinfo with AI_PASSIVE and empty port on aix
+    - added AI_ALL to getaddrinfo as default flag on OS390
+
 version 1.23
     - added "traceroute.pl" to examples
     - changed storage of internal data
@@ -10,7 +23,7 @@ version 1.23
 version 1.22
     - added function "available"
     - changed prototype of function "write"
-    - fixed mortal of socket classes that are created by "accept"
+    - fixed mortallity of classes created by "accept"
     - fixed value of constant $AF_INET6 on aix
     - fixed functions "read", "write", "readline" and "writeline"
     - fixed wrong ip4 and ip6 notations

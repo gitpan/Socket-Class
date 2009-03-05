@@ -1,96 +1,104 @@
 #include "socket_class.h"
 
-my_global_t global;
+sc_global_t global;
 
-INLINE void my_thread_var_add( my_thread_var_t *tv ) {
+INLINE void socket_class_add( socket_class_t *sc ) {
 	size_t cascade;
 #ifdef USE_ITHREADS
-	MUTEX_INIT( &tv->thread_lock );
+	MUTEX_INIT( &sc->thread_lock );
 #endif
 	GLOBAL_LOCK();
-	tv->id = ++ global.counter;
-	cascade = (size_t) tv->id % SC_TV_CASCADE;
+	sc->id = ++ global.counter;
+	cascade = (size_t) sc->id % SC_CASCADE;
 #ifdef SC_DEBUG
-	_debug( "add tv %lu cascade %lu\n", tv->id, cascade );
+	_debug( "add sc %lu cascade %lu\n", sc->id, cascade );
 #endif
-	if( global.first_thread[cascade] == NULL )
-		global.first_thread[cascade] = tv;
+	if( global.first_socket[cascade] == NULL )
+		global.first_socket[cascade] = sc;
 	else {
-		global.last_thread[cascade]->next = tv;
-		tv->prev = global.last_thread[cascade];
+		global.last_socket[cascade]->next = sc;
+		sc->prev = global.last_socket[cascade];
 	}
-	global.last_thread[cascade] = tv;
+	global.last_socket[cascade] = sc;
 	GLOBAL_UNLOCK();
 }
 
-INLINE void my_thread_var_free( my_thread_var_t *tv ) {
-	TV_LOCK( tv );
+INLINE void socket_class_free( socket_class_t *sc ) {
 #ifdef SC_DEBUG
-	_debug( "free tv %lu socket %d\n", tv->id, tv->sock );
+	_debug( "free sc %lu socket %d\n", sc->id, sc->sock );
 #endif
-	Socket_close( tv->sock );
-	if( tv->s_domain == AF_UNIX ) {
-		remove( ((struct sockaddr_un *) tv->l_addr.a)->sun_path );
+	Socket_close( sc->sock );
+	if( sc->s_domain == AF_UNIX ) {
+		remove( ((struct sockaddr_un *) sc->l_addr.a)->sun_path );
 	}
-	Safefree( tv->rcvbuf );
-	Safefree( tv->classname );
-	TV_UNLOCK( tv );
+	Safefree( sc->rcvbuf );
+	Safefree( sc->classname );
 #ifdef USE_ITHREADS
-	MUTEX_DESTROY( &tv->thread_lock );
+	MUTEX_DESTROY( &sc->thread_lock );
 #endif
-	Safefree( tv );
+	Safefree( sc );
 }
 
-INLINE void my_thread_var_rem( my_thread_var_t *tv ) {
-	size_t cascade = (size_t) tv->id % SC_TV_CASCADE;
+INLINE void socket_class_rem( socket_class_t *sc ) {
+	size_t cascade = (size_t) sc->id % SC_CASCADE;
 	GLOBAL_LOCK();
 #ifdef SC_DEBUG
-	_debug( "removing thread_var %lu\n", tv->id );
+	_debug( "remove sc %lu\n", sc->id );
 #endif
-	if( tv == global.last_thread[cascade] )
-		global.last_thread[cascade] = tv->prev;
-	if( tv == global.first_thread[cascade] )
-		global.first_thread[cascade] = tv->next;
-	if( tv->prev )
-		tv->prev->next = tv->next;
-	if( tv->next )
-		tv->next->prev = tv->prev;
-	my_thread_var_free( tv );
+	if( sc == global.last_socket[cascade] )
+		global.last_socket[cascade] = sc->prev;
+	if( sc == global.first_socket[cascade] )
+		global.first_socket[cascade] = sc->next;
+	if( sc->prev )
+		sc->prev->next = sc->next;
+	if( sc->next )
+		sc->next->prev = sc->prev;
 	GLOBAL_UNLOCK();
+	socket_class_free( sc );
 }
 
-INLINE my_thread_var_t *my_thread_var_find( SV *sv ) {
+INLINE socket_class_t *socket_class_find( SV *sv ) {
 	size_t cascade;
-	my_thread_var_t *tvf, *tvl;
-	unsigned long id;
+	socket_class_t *scf, *scl;
+	u_long id;
+	SV **psv;
 	if( global.destroyed )
 		return NULL;
-	if( ! SvROK( sv ) || ! (sv = SvRV( sv )) || ! SvIOK( sv ) )
+	if( ! SvROK( sv ) )
 		return NULL;
-	id = (unsigned long) SvIV( sv );
-	cascade = (size_t) id % SC_TV_CASCADE;
+	sv = SvRV( sv );
+	if( SvTYPE( sv ) != SVt_PVHV )
+		return NULL;
+	psv = hv_fetch( (HV *) sv, "_sc_", 4, 0 );
+	if( psv == NULL )
+		return NULL;
+	sv = *psv;
+	if( ! SvIOK( sv ) )
+		return NULL;
+	id = (u_long) SvIV( sv );
+	cascade = (size_t) id % SC_CASCADE;
 	GLOBAL_LOCK();
-	tvf = global.first_thread[cascade];
-	tvl = global.last_thread[cascade];
+	scf = global.first_socket[cascade];
+	scl = global.last_socket[cascade];
 	while( 1 ) {
-		if( tvl == NULL )
+		if( scl == NULL )
 			break;
-		if( tvl->id == id )
+		if( scl->id == id )
 			goto retl;
-		if( tvf->id == id )
+		if( scf->id == id )
 			goto retf;
-		tvl = tvl->prev;
-		tvf = tvf->next;
+		scl = scl->prev;
+		scf = scf->next;
 	}
 #ifdef SC_DEBUG
-	_debug( "tv %lu NOT found\n", id );
+	_debug( "sc %lu NOT found\n", id );
 #endif
 retf:
 	GLOBAL_UNLOCK();
-	return tvf;
+	return scf;
 retl:
 	GLOBAL_UNLOCK();
-	return tvl;
+	return scl;
 }
 
 #ifdef _WIN32
@@ -153,31 +161,32 @@ INLINE void Socket_setaddr_UNIX( my_sockaddr_t *addr, const char *path ) {
 		my_strncpy( a->sun_path, path, 100 );
 }
 
-INLINE int Socket_setaddr_INET( tv, host, port, use )
-	my_thread_var_t *tv;
-	const char *host;
-	const char *port;
-	int use;
-{
+INLINE int Socket_setaddr_INET(
+	socket_class_t *sc, const char *host, const char *port, int use
+) {
 #ifndef SC_OLDNET
 	struct addrinfo aih;
 	struct addrinfo *ail = NULL;
 	my_sockaddr_t *addr;
 	int r;
-	if( tv->s_domain == AF_BLUETOOTH )
-		return Socket_setaddr_BTH( tv, host, port, use );
+	if( sc->s_domain == AF_BLUETOOTH )
+		return Socket_setaddr_BTH( sc, host, port, use );
 	memset( &aih, 0, sizeof( struct addrinfo ) );
-	aih.ai_family = tv->s_domain;
-	aih.ai_socktype = tv->s_type;
-	aih.ai_protocol = tv->s_proto;
+	aih.ai_family = sc->s_domain;
+	aih.ai_socktype = sc->s_type;
+	aih.ai_protocol = sc->s_proto;
 	if( use == ADDRUSE_LISTEN ) {
 		aih.ai_flags = AI_PASSIVE;
-		addr = &tv->l_addr;
+		addr = &sc->l_addr;
+		if( port == NULL || *port == '\0' )
+			port = "0";
 	}
 	else {
-		addr = &tv->r_addr;
+		addr = &sc->r_addr;
+		if( port == NULL )
+			port = "";
 	}
-	r = getaddrinfo( host, port != NULL ? port : "", &aih, &ail );
+	r = getaddrinfo( host, port, &aih, &ail );
 	if( r != 0 ) {
 #ifdef SC_DEBUG
 		_debug( "Socket_setaddr_INET getaddrinfo() failed %d\n", r );
@@ -185,27 +194,29 @@ INLINE int Socket_setaddr_INET( tv, host, port, use )
 #ifndef _WIN32
 		{
 			const char *s1 = gai_strerror( r );
-			strncpy( tv->last_error, s1, sizeof( tv->last_error ) );
+			strncpy( sc->last_error, s1, sizeof( sc->last_error ) );
 		}
-#endif
+#endif /* _WIN32 */
 		return r;
 	}
 	addr->l = (socklen_t) ail->ai_addrlen;
 	memcpy( addr->a, ail->ai_addr, ail->ai_addrlen );
 	freeaddrinfo( ail );
-#else
+#else /* SC_OLDNET */
 	my_sockaddr_t *addr;
-	if( tv->s_domain == AF_BLUETOOTH )
-		return Socket_setaddr_BTH( tv, host, port, use );
+	if( sc->s_domain == AF_BLUETOOTH )
+		return Socket_setaddr_BTH( sc, host, port, use );
 	GLOBAL_LOCK();
-	addr = (use == ADDRUSE_LISTEN) ? &tv->l_addr : &tv->r_addr;
-	if( tv->s_domain == AF_INET ) {
+	addr = (use == ADDRUSE_LISTEN) ? &sc->l_addr : &sc->r_addr;
+	if( sc->s_domain == AF_INET ) {
 		struct sockaddr_in *in = (struct sockaddr_in *) addr->a;
 		addr->l = sizeof(struct sockaddr_in);
 		in->sin_family = AF_INET;
 		if( host == NULL && use != ADDRUSE_LISTEN )
 			host = "127.0.0.0";
 		if( host != NULL ) {
+			if( host[0] == '\0' )
+				in->sin_addr.s_addr = 0;
 			if( host[0] >= '0' && host[0] <= '9' )
 				in->sin_addr.s_addr = inet_addr( host );
 			else {
@@ -216,7 +227,9 @@ INLINE int Socket_setaddr_INET( tv, host, port, use )
 			}
 		}
 		if( port != NULL ) {
-			if( port[0] >= '0' && port[0] <= '9' )
+			if( port[0] == '\0' )
+				in->sin_port = 0;
+			else if( port[0] >= '0' && port[0] <= '9' )
 				in->sin_port = htons( atoi( port ) );
 			else {
 				struct servent *se;
@@ -233,7 +246,9 @@ INLINE int Socket_setaddr_INET( tv, host, port, use )
 		in6->sin6_family = AF_INET6;
 #ifndef _WIN32
 		if( host != NULL ) {
-			if( ( host[0] >= '0' && host[0] <= '9' ) || host[0] == ':' ) {
+			if( (*host >= '0' && *host <= '9') ||
+				(*host >= 'A' && *host <= 'F') || *host == ':'
+			) {
 				if( inet_pton( AF_INET6, host, &in6->sin6_addr ) != 0 ) {
 #ifdef SC_DEBUG
 					_debug( "inet_pton failed %d\n", Socket_errno() );
@@ -251,7 +266,9 @@ INLINE int Socket_setaddr_INET( tv, host, port, use )
 			}
 		}
 		if( port != NULL ) {
-			if( port[0] >= '0' && port[0] <= '9' )
+			if( port[0] == '\0' )
+				in6->sin6_port = 0;
+			else if( port[0] >= '0' && port[0] <= '9' )
 				in6->sin6_port = htons( atol( port ) );
 			else {
 				struct servent *se;
@@ -261,7 +278,7 @@ INLINE int Socket_setaddr_INET( tv, host, port, use )
 				in6->sin6_port = se->s_port;
 			}
 		}
-#endif
+#endif /* ! _WIN32 */
 	}
 	goto exit;
 error:
@@ -269,24 +286,24 @@ error:
 	return Socket_errno();
 exit:
 	GLOBAL_UNLOCK();
-#endif
+#endif /* SC_OLDNET */
 	return 0;
 }
 
 INLINE int Socket_setaddr_BTH(
-	my_thread_var_t *tv, const char *host, const char *port, int use
+	socket_class_t *sc, const char *host, const char *port, int use
 ) {
 	my_sockaddr_t *addr;
 	SOCKADDR_RFCOMM *rca;
 	SOCKADDR_L2CAP *l2a;
 
 	if( use == ADDRUSE_LISTEN ) {
-		addr = &tv->l_addr;
+		addr = &sc->l_addr;
 	}
 	else {
-		addr = &tv->r_addr;
+		addr = &sc->r_addr;
 	}
-	switch( tv->s_proto ) {
+	switch( sc->s_proto ) {
 	case BTPROTO_RFCOMM:
 #ifdef SC_DEBUG
 		_debug( "using BLUETOOTH RFCOMM host %s channel %s\n", host, port );
@@ -315,28 +332,26 @@ INLINE int Socket_setaddr_BTH(
 		break;
 #ifdef SC_HAS_BLUETOOTH
 	default:
-		return bt_setaddr( tv, host, port, use );
+		return bt_setaddr( sc, host, port, use );
 #endif
 	}
 	return 0;
 }
 
 INLINE int Socket_domainbyname( const char *name ) {
-	char tmp[20];
-	my_strncpyu( tmp, name, sizeof( tmp ) );
-	if( strcmp( tmp, "INET" ) == 0 ) {
+	if( my_stricmp( name, "INET" ) == 0 ) {
 		return AF_INET;
 	}
-	else if( strcmp( tmp, "INET6" ) == 0 ) {
+	else if( my_stricmp( name, "INET6" ) == 0 ) {
 		return AF_INET6;
 	}
-	else if( strcmp( tmp, "UNIX" ) == 0 ) {
+	else if( my_stricmp( name, "UNIX" ) == 0 ) {
 		return AF_UNIX;
 	}
-	else if( strcmp( tmp, "BTH" ) == 0 ) {
+	else if( my_stricmp( name, "BTH" ) == 0 ) {
 		return AF_BLUETOOTH;
 	}
-	else if( strcmp( tmp, "BLUETOOTH" ) == 0 ) {
+	else if( my_stricmp( name, "BLUETOOTH" ) == 0 ) {
 		return AF_BLUETOOTH;
 	}
 	else if( name[0] >= '0' && name[0] <= '9' ) {
@@ -346,15 +361,13 @@ INLINE int Socket_domainbyname( const char *name ) {
 }
 
 INLINE int Socket_typebyname( const char *name ) {
-	char tmp[20];
-	my_strncpyu( tmp, name, sizeof( tmp ) );
-	if( strcmp( tmp, "STREAM" ) == 0 ) {
+	if( my_stricmp( name, "STREAM" ) == 0 ) {
 		return SOCK_STREAM;
 	}
-	else if( strcmp( tmp, "DGRAM" ) == 0 ) {
+	else if( my_stricmp( name, "DGRAM" ) == 0 ) {
 		return SOCK_DGRAM;
 	}
-	else if( strcmp( tmp, "RAW" ) == 0 ) {
+	else if( my_stricmp( name, "RAW" ) == 0 ) {
 		return SOCK_RAW;
 	}
 	else if( name[0] >= '0' && name[0] <= '9' ) {
@@ -364,21 +377,19 @@ INLINE int Socket_typebyname( const char *name ) {
 }
 
 INLINE int Socket_protobyname( const char *name ) {
-	char tmp[20];
-	my_strncpyu( tmp, name, sizeof( tmp ) );
-	if( strcmp( tmp, "TCP" ) == 0 ) {
+	if( my_stricmp( name, "TCP" ) == 0 ) {
 		return IPPROTO_TCP;
 	}
-	else if( strcmp( tmp, "UDP" ) == 0 ) {
+	else if( my_stricmp( name, "UDP" ) == 0 ) {
 		return IPPROTO_UDP;
 	}
-	else if( strcmp( tmp, "ICMP" ) == 0 ) {
+	else if( my_stricmp( name, "ICMP" ) == 0 ) {
 		return IPPROTO_ICMP;
 	}
-	else if( strcmp( tmp, "RFCOMM" ) == 0 ) {
+	else if( my_stricmp( name, "RFCOMM" ) == 0 ) {
 		return BTPROTO_RFCOMM;
 	}
-	else if( strcmp( tmp, "L2CAP" ) == 0 ) {
+	else if( my_stricmp( name, "L2CAP" ) == 0 ) {
 		return BTPROTO_L2CAP;
 	}
 	else if( name[0] >= '0' && name[0] <= '9' ) {
@@ -388,42 +399,6 @@ INLINE int Socket_protobyname( const char *name ) {
 		struct protoent *pe;
 		pe = getprotobyname( (char *) name );
 		return pe != NULL ? pe->p_proto : 0;
-	}
-}
-
-INLINE int Socket_setopt(
-	SV *this, int level, int optname, const void *optval, socklen_t optlen
-) {
-	my_thread_var_t *tv;
-	int r;
-	tv = my_thread_var_find( this );
-	if( tv != NULL ) {
-		TV_LOCK( tv );
-		r = setsockopt( tv->sock, level, optname, optval, optlen );
-		TV_ERRNO( tv, r == SOCKET_ERROR ? Socket_errno() : 0 );
-		TV_UNLOCK( tv );
-		return r;
-	}
-	else {
-		return SOCKET_ERROR;
-	}
-}
-
-INLINE int Socket_getopt(
-	SV *this, int level, int optname, void *optval, socklen_t *optlen
-) {
-	my_thread_var_t *tv;
-	int r;
-	tv = my_thread_var_find( this );
-	if( tv != NULL ) {
-		TV_LOCK( tv );
-		r = getsockopt( tv->sock, level, optname, optval, optlen );
-		TV_ERRNO( tv, r == SOCKET_ERROR ? Socket_errno() : 0 );
-		TV_UNLOCK( tv );
-		return r;
-	}
-	else {
-		return SOCKET_ERROR;
 	}
 }
 
@@ -450,64 +425,34 @@ INLINE int Socket_setblocking( SOCKET s, int value ) {
 	return r;
 }
 
-INLINE int Socket_write( SV *this, const char *buf, size_t len ) {
-	my_thread_var_t *tv;
+INLINE int Socket_write( socket_class_t *sc, const char *buf, int len ) {
 	int r;
-	tv = my_thread_var_find( this );
-	if( tv == NULL )
-		return SOCKET_ERROR;
-	TV_LOCK( tv );
-	r = send( tv->sock, buf, (int) len, 0 );
+	r = send( sc->sock, buf, len, 0 );
 	if( r == SOCKET_ERROR ) {
-		TV_ERRNOLAST( tv );
-		switch( tv->last_errno ) {
+		SOCK_ERRNOLAST( sc );
+		switch( sc->last_errno ) {
 		case EWOULDBLOCK:
 			/* threat not as an error */
-			tv->last_errno = 0;
-			r = 0;
 			break;
 		default:
 #ifdef SC_DEBUG
-			_debug( "write error %u\n", tv->last_errno );
+			_debug( "write error %u\n", sc->last_errno );
 #endif
-			tv->state = SOCK_STATE_ERROR;
-			r = SOCKET_ERROR;
-			break;
+			sc->state = SC_STATE_ERROR;
+			return SOCKET_ERROR;
 		}
-		goto exit;
 	}
 	else if( r == 0 ) {
-		TV_ERRNO( tv, ECONNRESET );
+		SOCK_ERRNO( sc, ECONNRESET );
 #ifdef SC_DEBUG
-		_debug( "write error %u\n", tv->last_errno );
+		_debug( "write error %u\n", sc->last_errno );
 #endif
-		tv->state = SOCK_STATE_ERROR;
-		r = SOCKET_ERROR;
-		goto exit;
+		sc->state = SC_STATE_ERROR;
+		return SOCKET_ERROR;
 	}
-	TV_ERRNO( tv, 0 );
-exit:
-	TV_UNLOCK( tv );
-	return r;
+	SOCK_ERRNO( sc, 0 );
+	return 0;
 }
-
-/*
-INLINE unsigned short my_ntohs( unsigned short a ) {
-#if BYTEORDER == 0x4321 || BYTEORDER == 0x87654321
-	return a;
-#else
-	return ((a >> 8) & 0xff) | (a & 0xff) << 8;
-#endif
-}
-
-INLINE unsigned short my_htons( unsigned short a ) {
-#if BYTEORDER == 0x4321 || BYTEORDER == 0x87654321
-	return a;
-#else
-	return ((a >> 8) & 0xff) | (a & 0xff) << 8;
-#endif
-}
-*/
 
 INLINE int my_ba2str( const bdaddr_t *ba, char *str ) {
 	register const unsigned char *b = (const unsigned char *) ba;
@@ -530,12 +475,9 @@ INLINE int my_str2ba( const char *str, bdaddr_t *ba ) {
 	return 0;
 }
 
+const char *HEXTAB = "0123456789ABCDEF";
+
 INLINE char *my_itoa( char *str, long value, int radix ) {
-	static const char HEXTAB[] = {
-		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-		'A', 'B', 'C', 'D', 'E', 'F'
-	};
-	int rem;
     char tmp[21], *ret = tmp, neg = 0;
 	if( value < 0 ) {
 		value = -value;
@@ -544,9 +486,8 @@ INLINE char *my_itoa( char *str, long value, int radix ) {
 	switch( radix ) {
 	case 16:
 		do {
-			rem = (int) (value % 16);
+			*ret ++ = HEXTAB[value % 16];
 			value /= 16;
-			*ret ++ = HEXTAB[rem];
 		} while( value > 0 );
 		break;
 	default:
@@ -587,19 +528,6 @@ INLINE char *my_strcpy( char *dst, const char *src ) {
 	return dst;
 }
 
-INLINE char *my_strncpyu( char *dst, const char *src, size_t len ) {
-	register char ch;
-	for( ; len > 0; len -- ) {
-		if( (ch = *src ++) == '\0' ) {
-			*dst = '\0';
-			return dst;
-		}
-		*dst ++ = toupper( ch );
-	}
-	*dst = '\0';
-	return dst;
-}
-
 INLINE int my_stricmp( const char *cs, const char *ct ) {
 	register signed char res;
 	while( 1 ) {
@@ -617,14 +545,45 @@ INLINE int my_debug( const char *fmt, ... ) {
 	size_t l;
 	char *tmp, *s1;
 	l = strlen( fmt );
-	tmp = malloc( 512 + l );
-	s1 = my_strcpy( tmp, "<SC_DEBUG> " );
+	tmp = malloc( 64 + l );
+	s1 = my_strcpy( tmp, "[Socket::Class] " );
 	s1 = my_strcpy( s1, fmt );
 	va_start( a, fmt );
 	r = vfprintf( stderr, tmp, a );
+	fflush( stderr );
 	va_end( a );
 	free( tmp );
 	return r;
 }
 
-#endif
+#if SC_DEBUG > 1
+
+HV					*hv_dbg_mem = NULL;
+perl_mutex			dbg_mem_lock;
+
+void debug_init() {
+	_debug( "init memory debugger\n" );
+	MUTEX_INIT( &dbg_mem_lock );
+	hv_dbg_mem = newHV();
+}
+
+void debug_free() {
+	SV *sv_val;
+	char *key, *val;
+	I32 retlen;
+	STRLEN lval;
+	_debug( "hv_dbg_mem entries %u\n", HvKEYS( hv_dbg_mem ) );
+	if( HvKEYS( hv_dbg_mem ) ) {
+		hv_iterinit( hv_dbg_mem );
+		while( (sv_val = hv_iternextsv( hv_dbg_mem, &key, &retlen )) != NULL ) {
+			val = SvPV( sv_val, lval );
+			_debug( "unfreed memory from %s\n", val );
+		}
+	}
+	sv_2mortal( (SV *) hv_dbg_mem );
+	MUTEX_DESTROY( &dbg_mem_lock );
+}
+
+#endif /* SC_DEBUG > 1 */
+
+#endif /* SC_DEBUG */

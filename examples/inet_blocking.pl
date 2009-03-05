@@ -1,5 +1,9 @@
 #!/usr/bin/perl
 
+BEGIN {
+	unshift @INC, 'blib/lib', 'blib/arch';
+}
+
 use threads;
 use threads::shared;
 
@@ -29,8 +33,8 @@ $client->write( "S" x 512 );
 
 threads->create( \&client_thread, $client );
 
-our $client_count = 0;
-our $client_ts : shared = &microtime();
+our $packet_count = 0;
+our $client_ts : shared;
 
 sleep( 9 );
 
@@ -101,6 +105,7 @@ sub client_thread {
 	print "\nstarting client thread\n";
 	$trhd = threads->self;
 	$tid = $trhd->tid;
+	$client_ts = &Time::HiRes::time();
 	while( $RUNNING ) {
 		$got = $sock->is_readable( 100 );
 		if( ! defined $got ) {
@@ -117,10 +122,10 @@ sub client_thread {
 			warn $sock->error;
 			last;
 		}
-		$client_count ++;
-		if( ( $client_count % 100 ) == 0 ) {
-			my $ac = sprintf( '%0.1f', $client_count / ( &microtime() - $client_ts ) );
-			print "$tid got $client_count packets a $got bytes $ac p/s\n";
+		$packet_count ++;
+		if( ($packet_count % 100) == 0 ) {
+			my $ac = sprintf( '%0.1f', $packet_count / (&Time::HiRes::time() - $client_ts) );
+			print "$tid got $packet_count packets a $got bytes $ac p/s\n";
 		}
 		$got = $sock->is_writable( 100 );
 		if( ! defined $got ) {
@@ -137,9 +142,4 @@ sub client_thread {
 	$sock->free();
 	threads->self->detach() if $RUNNING;
 	return 1;
-}
-
-sub microtime {
-	my( $sec, $usec ) = &Time::HiRes::gettimeofday();
-	return $sec + $usec / 1000000;
 }

@@ -1,10 +1,11 @@
+package Socket::Class::Install;
 use 5.006;
 use ExtUtils::MakeMaker;
 use Config;
 
 my %os_supported = (
 	'linux' => 1, 'MSWin32' => 1, 'darwin' => 1, 'cygwin' => 1, 'aix' => 1,
-	'solaris' => 1, 'os390' => 1
+	'solaris' => 1, 'os390' => 1, 'hpux' => 1
 );
 
 if( ! $os_supported{$^O} ) {
@@ -16,34 +17,43 @@ print <<EOF1;
 EOF1
 }
 
-$Verbose = 0;
-
-foreach( @ARGV ) {
-	$_ = lc( $_ );
-	if( index( $_, '--debug' ) == 0 ) {
-		if( m/--debug=(\d+)/ ) {
+my @argv = ();
+foreach my $p( @ARGV ) {
+	$_ = lc( $p );
+	if( /--debug/ ) {
+		if( /--debug=(\d+)/ ) {
 			$_DEBUG = $1;
 		}
 		else {
 			$_DEBUG = 1;
 		}
 	}
+	elsif( /--verbose/ ) {
+		$Verbose = 1;
+	}
+	elsif( /--help/ ) {
+		&print_usage();
+	}
+	else {
+		push @argv, $p;
+	}
 }
+@ARGV = @argv;
 
 %_MAKEOPTS = (
-    NAME => 'Socket::Class',
-    VERSION_FROM => 'Class.pm', # finds $VERSION
-    LIBS => [], # e.g., '-lm'
-    DEFINE => '', # e.g., '-DHAVE_SOMETHING'
-    INC => '', # e.g., '-I. -I/usr/include/other'
-    XSPROTOARG => '-noprototypes',
-    PREREQ_PM => {
-    },
-    OBJECT => '$(O_FILES)',
-    XS => {'Class.xs' => 'Class.c'},
-    C => ['socket_class.c', 'Class.c'],
-    H => ['socket_class.h'],
-    DIR => [],
+	'NAME' => 'Socket::Class',
+	'VERSION_FROM' => 'Class.pm',
+	'LIBS' => [ '' ],
+	'DEFINE' => '',
+	'INC' => '',
+	'XSPROTOARG' => '-noprototypes',
+	'PREREQ_PM' => {
+	},
+	'OBJECT' => '$(O_FILES)',
+	'XS' => {'Class.xs' => 'Class.c'},
+	'C' => ['sc_mod_def.c', 'socket_class.c', 'Class.c'],
+	'H' => ['c_module.h', 'sc_mod_def.h', 'socket_class.h'],
+	'DIR' => [ 'xs' ],
 );
 
 if( $_DEBUG ) {
@@ -55,6 +65,8 @@ if( $_DEBUG ) {
 }
 if( $^O eq 'MSWin32' ) {
 	$_MAKEOPTS{'DEFINE'} .= ' -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS';
+	# help makemaker removing not existing libs, eg. bufferoverflowU.lib
+	push @{$_MAKEOPTS{'LIBS'}}, '-lws2_32';
 }
 elsif( $^O eq 'cygwin' ) {
 	push @{$_MAKEOPTS{'LIBS'}}, '-L/lib/w32api -lole32 -lversion -lws2_32';
@@ -76,6 +88,13 @@ else {
 	$r += find_header_item( \@_IP, 'netdb.h', 'getnameinfo' );
 	if( $r < 3 ) {
 		$_MAKEOPTS{'DEFINE'} .= ' -DSC_OLDNET';
+	}
+	$r = find_header_item( \@_IP, 'time.h', 'nanosleep' );
+	if( $r ) {
+		$_MAKEOPTS{'DEFINE'} .= ' -DSC_HAS_NANOSLEEP';
+		if( $^O eq 'solaris' ) {
+			$_MAKEOPTS{'LIBS'}->[0] .= ' -lrt';
+		}
 	}
 }
 
@@ -128,6 +147,20 @@ sub find_header_item {
 	$level or print "NOT found\n";
 	return 0;
 }
+
+sub print_usage {
+	print <<EOTH;
+
+Usage: perl $0 [options]
+Options:
+    --help                 print this message
+    --debug[=LEVEL]        compile with debug messages enabled (level 1-2)
+    --verbose              enable MakeMakers verbosity
+
+EOTH
+	exit 256;
+}
+
 
 package MY;
 

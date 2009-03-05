@@ -9,6 +9,7 @@ BEGIN {
 	require Config;
 	if( ! $Config::Config{'useithreads'} ) {
 		print STDERR "Skip: not supported on this platform\n";
+		lock( $_pos );
 		for( $_pos = 1; $_pos <= $_tests; $_pos ++ ) {
 			print "ok $_pos\n";
 		}
@@ -17,6 +18,7 @@ BEGIN {
 
 	$SIG{'__DIE__'} = sub {
 		print STDERR "Skip: not supported on this platform\n";
+		lock( $_pos );
 		for( $_pos = 1; $_pos <= $_tests; $_pos ++ ) {
 			print "ok $_pos\n";
 		}
@@ -77,14 +79,19 @@ for $i( 1 .. 3 ) {
 }
 
 for $i( 1 .. 100 ) {
-	last if $_pos > $_tests;
+	{
+		lock( $_pos );
+		last if $_pos > $_tests;
+	}
 	$server->wait( 20 );
 }
 
 _close:
 $RUNNING = 0;
 foreach $thread( threads->list ) {
-	$thread->join();
+	eval {
+		$thread->join();
+	};
 }
 
 _end:
@@ -160,19 +167,21 @@ sub client_thread {
 
 sub _check {
 	lock( $_pos );
-	print "" . ( $_[0] ? "ok" : "fail" ) . " $_pos\n";
+	print "" . ($_[0] ? "ok" : "not ok") . " $_pos\n";
 	$_pos ++;
 }
 
 sub _skip_all {
 	print STDERR "Skipped: probably not supported on this platform\n";
+	lock( $_pos );
 	for( ; $_pos <= $_tests; $_pos ++ ) {
 		print "ok $_pos\n";
 	}
 }
 
 sub _fail_all {
+	lock( $_pos );
 	for( ; $_pos <= $_tests; $_pos ++ ) {
-		print "fail $_pos\n";
+		print "not ok $_pos\n";
 	}
 }

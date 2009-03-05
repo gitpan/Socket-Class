@@ -1,5 +1,9 @@
 #!/usr/bin/perl
 
+BEGIN {
+	unshift @INC, 'blib/lib', 'blib/arch';
+}
+
 use threads;
 use threads::shared;
 
@@ -12,7 +16,7 @@ our $RUNNING : shared = 1;
 
 $server = Socket::Class->new(
 	'proto' => 'udp',
-	'local_addr' => '0.0.0.0',
+	'local_addr' => '127.0.0.1',
 	'local_port' => 0,
 	'reuseaddr' => 1,
 ) or die Socket::Class->error;
@@ -28,8 +32,8 @@ $pingcount = 0;
 $pingtime = 0;
 
 $ts = time;
-while( time - $ts < 3 ) {
-	$r = $client->sendto( 'PING ' . microtime(), $paddr );
+while( time - $ts < 9 ) {
+	$r = $client->sendto( 'PING ' . &Time::HiRes::time(), $paddr );
 	if( ! defined $r ) {
 		warn $client->error;
 		last;
@@ -47,7 +51,7 @@ while( time - $ts < 3 ) {
 	($cmd, $arg) = $buf =~ m/^(\w+)\s+(.*)/;
 	if( $cmd eq 'RPING' ) {
 		$pingcount ++;
-		$pingtime += (&microtime() - $arg);
+		$pingtime += (&Time::HiRes::time() - $arg);
 	}
 	if( ($pingcount % 100) == 0 ) {
 		$apt = sprintf( '%0.3f', ($pingtime / $pingcount) * 1000 );
@@ -57,8 +61,11 @@ while( time - $ts < 3 ) {
 
 $RUNNING = 0;
 foreach $thread( threads->list() ) {
-	$thread->join();
+	eval {
+		$thread->join();
+	};
 }
+say "";
 
 sub server_thread {
 	my( $sock ) = @_;
@@ -86,10 +93,5 @@ sub server_thread {
 		}
 	}
 	$sock->free();
-	print "\nclosing server thread\n";
-}
-
-sub microtime {
-	my( $sec, $usec ) = &Time::HiRes::gettimeofday();
-	return $sec + $usec / 1000000;
+	say "closing server thread";
 }

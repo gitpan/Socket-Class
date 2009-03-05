@@ -53,7 +53,7 @@ _end:
 
 sub _check {
 	my( $val ) = @_;
-	print "" . ( $val ? "ok" : "fail" ) . " $_pos\n";
+	print "" . ($val ? "ok" : "not ok") . " $_pos\n";
 	$_pos ++;
 }
 
@@ -66,6 +66,6 @@ sub _skip_all {
 
 sub _fail_all {
 	for( ; $_pos <= $_tests; $_pos ++ ) {
-		print "fail $_pos\n";
+		print "not ok $_pos\n";
 	}
 }
