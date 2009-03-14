@@ -4,11 +4,9 @@ sc_global_t global;
 
 INLINE void socket_class_add( socket_class_t *sc ) {
 	size_t cascade;
-#ifdef USE_ITHREADS
-	MUTEX_INIT( &sc->thread_lock );
-#endif
 	GLOBAL_LOCK();
 	sc->id = ++ global.counter;
+	sc->refcnt = 1;
 	cascade = (size_t) sc->id % SC_CASCADE;
 #ifdef SC_DEBUG
 	_debug( "add sc %lu cascade %lu\n", sc->id, cascade );
@@ -27,15 +25,14 @@ INLINE void socket_class_free( socket_class_t *sc ) {
 #ifdef SC_DEBUG
 	_debug( "free sc %lu socket %d\n", sc->id, sc->sock );
 #endif
+	if( sc->user_data != NULL && sc->free_user_data != NULL )
+		sc->free_user_data( sc->user_data );
 	Socket_close( sc->sock );
 	if( sc->s_domain == AF_UNIX ) {
 		remove( ((struct sockaddr_un *) sc->l_addr.a)->sun_path );
 	}
-	Safefree( sc->rcvbuf );
+	Safefree( sc->buffer );
 	Safefree( sc->classname );
-#ifdef USE_ITHREADS
-	MUTEX_DESTROY( &sc->thread_lock );
-#endif
 	Safefree( sc );
 }
 
@@ -134,7 +131,7 @@ INLINE int inet_aton( const char *cp, struct in_addr *inp ) {
 	return inp->s_addr == INADDR_NONE ? 0 : 1;
 }
 
-#else
+#else /* ! _WIN32 */
 
 INLINE void Socket_error( char *str, DWORD len, long num ) {
 	char *s1, *s2;
@@ -151,7 +148,44 @@ INLINE void Socket_error( char *str, DWORD len, long num ) {
 		my_strncpy( s1, s2, len );
 }
 
+#ifndef SC_OLDNET
+
+/* interpet an ai errno as system errno */
+INLINE int Socket_ai_errno( int code ) {
+	switch( code ) {
+	case EAI_ADDRFAMILY:
+	case EAI_FAMILY:
+		return EAFNOSUPPORT;
+	case EAI_AGAIN:
+		return EAGAIN;
+	case EAI_BADFLAGS:
+		return EINVAL;
+	case EAI_FAIL:
+		return EOPNOTSUPP;
+	case EAI_MEMORY:
+		return ENOMEM;
+	case EAI_NODATA:
+		return ENODATA;
+	case EAI_NONAME:
+		return ENXIO;
+	case EAI_SERVICE:
+		return ENODEV;
+	case EAI_SOCKTYPE:
+		return ESOCKTNOSUPPORT;
+	case EAI_SYSTEM:
+		return errno;
+#ifdef EAI_OVERFLOW
+	case EAI_OVERFLOW:
+		return EOVERFLOW;
 #endif
+	default:
+		return code;
+	}
+}
+
+#endif
+
+#endif /* ! _WIN32 */
 
 INLINE void Socket_setaddr_UNIX( my_sockaddr_t *addr, const char *path ) {
 	struct sockaddr_un *a = (struct sockaddr_un *) addr->a;
@@ -192,10 +226,9 @@ INLINE int Socket_setaddr_INET(
 		_debug( "Socket_setaddr_INET getaddrinfo() failed %d\n", r );
 #endif
 #ifndef _WIN32
-		{
-			const char *s1 = gai_strerror( r );
-			strncpy( sc->last_error, s1, sizeof( sc->last_error ) );
-		}
+		SOCK_ERROR( sc, r, gai_strerror( r ) );
+#else
+		SOCK_ERRNO( sc, r );
 #endif /* _WIN32 */
 		return r;
 	}
@@ -283,7 +316,8 @@ INLINE int Socket_setaddr_INET(
 	goto exit;
 error:
 	GLOBAL_UNLOCK();
-	return Socket_errno();
+	SOCK_ERRNOLAST( sc );
+	return sc->last_errno;
 exit:
 	GLOBAL_UNLOCK();
 #endif /* SC_OLDNET */
@@ -429,29 +463,25 @@ INLINE int Socket_write( socket_class_t *sc, const char *buf, int len ) {
 	int r;
 	r = send( sc->sock, buf, len, 0 );
 	if( r == SOCKET_ERROR ) {
-		SOCK_ERRNOLAST( sc );
-		switch( sc->last_errno ) {
+		switch( r = Socket_errno() ) {
 		case EWOULDBLOCK:
 			/* threat not as an error */
-			break;
+			return 0;
 		default:
-#ifdef SC_DEBUG
-			_debug( "write error %u\n", sc->last_errno );
-#endif
-			sc->state = SC_STATE_ERROR;
-			return SOCKET_ERROR;
+			SOCK_ERRNO( sc, r );
+			goto error;
 		}
 	}
-	else if( r == 0 ) {
-		SOCK_ERRNO( sc, ECONNRESET );
-#ifdef SC_DEBUG
-		_debug( "write error %u\n", sc->last_errno );
-#endif
-		sc->state = SC_STATE_ERROR;
-		return SOCKET_ERROR;
+	else if( r != 0 ) {
+		return r;
 	}
-	SOCK_ERRNO( sc, 0 );
-	return 0;
+	SOCK_ERRNO( sc, ECONNRESET );
+error:
+#ifdef SC_DEBUG
+	_debug( "write error %u\n", sc->last_errno );
+#endif
+	sc->state = SC_STATE_ERROR;
+	return SOCKET_ERROR;
 }
 
 INLINE int my_ba2str( const bdaddr_t *ba, char *str ) {
@@ -560,11 +590,14 @@ INLINE int my_debug( const char *fmt, ... ) {
 
 HV					*hv_dbg_mem = NULL;
 perl_mutex			dbg_mem_lock;
+int					dbg_lock = FALSE;
 
 void debug_init() {
 	_debug( "init memory debugger\n" );
 	MUTEX_INIT( &dbg_mem_lock );
 	hv_dbg_mem = newHV();
+	SvSHARE( (SV *) hv_dbg_mem );
+	dbg_lock = TRUE;
 }
 
 void debug_free() {
@@ -581,6 +614,7 @@ void debug_free() {
 		}
 	}
 	sv_2mortal( (SV *) hv_dbg_mem );
+	dbg_lock = FALSE;
 	MUTEX_DESTROY( &dbg_mem_lock );
 }
 

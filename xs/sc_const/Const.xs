@@ -2,7 +2,7 @@
 #include <perl.h>
 #include <XSUB.h>
 
-#include <c_module.h>
+#include <mod_sc.h>
 
 enum export_item_type {
 	ITEM_LONG,
@@ -31,6 +31,100 @@ const export_item_t export_items[] = {
 	{ "AI_NUMERICSERV", ITEM_LONG, (const char *) 0x0400 },
 	{ "BTPROTO_L2CAP", ITEM_LONG, (const char *) BTPROTO_L2CAP },
 	{ "BTPROTO_RFCOMM", ITEM_LONG, (const char *) BTPROTO_RFCOMM },
+#if defined _WIN32
+	{ "EAI_ADDRFAMILY", ITEM_LONG, (const char *) 10047 },
+	{ "EAI_AGAIN", ITEM_LONG, (const char *) 11002 },
+	{ "EAI_BADFLAGS", ITEM_LONG, (const char *) 10022 },
+	{ "EAI_FAIL", ITEM_LONG, (const char *) 11003 },
+	{ "EAI_FAMILY", ITEM_LONG, (const char *) 10047 },
+	{ "EAI_MEMORY", ITEM_LONG, (const char *) WSA_NOT_ENOUGH_MEMORY },
+	{ "EAI_NODATA", ITEM_LONG, (const char *) 11004 },
+	{ "EAI_NONAME", ITEM_LONG, (const char *) 11001 },
+	{ "EAI_SERVICE", ITEM_LONG, (const char *) 10109 },
+	{ "EAI_SOCKTYPE", ITEM_LONG, (const char *) 10044 },
+	{ "EAI_SYSTEM", ITEM_LONG, (const char *) 0 },
+#else
+	{ "EAI_ADDRFAMILY", ITEM_LONG, (const char *) -9 },
+	{ "EAI_AGAIN", ITEM_LONG, (const char *) -3 },
+	{ "EAI_BADFLAGS", ITEM_LONG, (const char *) -1 },
+	{ "EAI_FAIL", ITEM_LONG, (const char *) -4 },
+	{ "EAI_FAMILY", ITEM_LONG, (const char *) -6 },
+	{ "EAI_MEMORY", ITEM_LONG, (const char *) -10 },
+	{ "EAI_NODATA", ITEM_LONG, (const char *) -5 },
+	{ "EAI_NONAME", ITEM_LONG, (const char *) -2 },
+	{ "EAI_SERVICE", ITEM_LONG, (const char *) -8 },
+	{ "EAI_SOCKTYPE", ITEM_LONG, (const char *) -7 },
+	{ "EAI_SYSTEM", ITEM_LONG, (const char *) -11 },
+#endif
+#if defined _WIN32
+	{ "EINTR", ITEM_LONG, (const char *) WSAEINTR },
+	{ "EACCES", ITEM_LONG, (const char *) WSAEACCES },
+	{ "EFAULT", ITEM_LONG, (const char *) WSAEFAULT },
+	{ "EINVAL", ITEM_LONG, (const char *) WSAEINVAL },
+	{ "EMFILE", ITEM_LONG, (const char *) WSAEMFILE },
+	{ "EWOULDBLOCK", ITEM_LONG, (const char *) WSAEWOULDBLOCK },
+	{ "EINPROGRESS", ITEM_LONG, (const char *) WSAEINPROGRESS },
+	{ "EALREADY", ITEM_LONG, (const char *) WSAEALREADY },
+	{ "ENOTSOCK", ITEM_LONG, (const char *) WSAENOTSOCK },
+	{ "EDESTADDRREQ", ITEM_LONG, (const char *) WSAEDESTADDRREQ },
+	{ "EMSGSIZE", ITEM_LONG, (const char *) WSAEMSGSIZE },
+	{ "EPROTOTYPE", ITEM_LONG, (const char *) WSAEPROTOTYPE },
+	{ "ENOPROTOOPT", ITEM_LONG, (const char *) WSAENOPROTOOPT },
+	{ "EPROTONOSUPPORT", ITEM_LONG, (const char *) WSAEPROTONOSUPPORT },
+	{ "ESOCKTNOSUPPORT", ITEM_LONG, (const char *) WSAESOCKTNOSUPPORT },
+	{ "EOPNOTSUPP", ITEM_LONG, (const char *) WSAEOPNOTSUPP },
+	{ "EPFNOSUPPORT", ITEM_LONG, (const char *) WSAEPFNOSUPPORT },
+	{ "EAFNOSUPPORT", ITEM_LONG, (const char *) WSAEAFNOSUPPORT },
+	{ "EADDRINUSE", ITEM_LONG, (const char *) WSAEADDRINUSE },
+	{ "EADDRNOTAVAIL", ITEM_LONG, (const char *) WSAEADDRNOTAVAIL },
+	{ "ENETDOWN", ITEM_LONG, (const char *) WSAENETDOWN },
+	{ "ENETUNREACH", ITEM_LONG, (const char *) WSAENETUNREACH },
+	{ "ENETRESET", ITEM_LONG, (const char *) WSAENETRESET },
+	{ "ECONNABORTED", ITEM_LONG, (const char *) WSAECONNABORTED },
+	{ "ECONNRESET", ITEM_LONG, (const char *) WSAECONNRESET },
+	{ "ENOBUFS", ITEM_LONG, (const char *) WSAENOBUFS },
+	{ "EISCONN", ITEM_LONG, (const char *) WSAEISCONN },
+	{ "ENOTCONN", ITEM_LONG, (const char *) WSAENOTCONN },
+	{ "ESHUTDOWN", ITEM_LONG, (const char *) WSAESHUTDOWN },
+	{ "ETIMEDOUT", ITEM_LONG, (const char *) WSAETIMEDOUT },
+	{ "ECONNREFUSED", ITEM_LONG, (const char *) WSAECONNREFUSED },
+	{ "EHOSTDOWN", ITEM_LONG, (const char *) WSAEHOSTDOWN },
+	{ "EHOSTUNREACH", ITEM_LONG, (const char *) WSAEHOSTUNREACH },
+#else
+	{ "EINTR", ITEM_LONG, (const char *) EINTR },
+	{ "EACCES", ITEM_LONG, (const char *) EACCES },
+	{ "EFAULT", ITEM_LONG, (const char *) EFAULT },
+	{ "EINVAL", ITEM_LONG, (const char *) EINVAL },
+	{ "EMFILE", ITEM_LONG, (const char *) EMFILE },
+	{ "EWOULDBLOCK", ITEM_LONG, (const char *) EWOULDBLOCK },
+	{ "EINPROGRESS", ITEM_LONG, (const char *) EINPROGRESS },
+	{ "EALREADY", ITEM_LONG, (const char *) EALREADY },
+	{ "ENOTSOCK", ITEM_LONG, (const char *) ENOTSOCK },
+	{ "EDESTADDRREQ", ITEM_LONG, (const char *) EDESTADDRREQ },
+	{ "EMSGSIZE", ITEM_LONG, (const char *) EMSGSIZE },
+	{ "EPROTOTYPE", ITEM_LONG, (const char *) EPROTOTYPE },
+	{ "ENOPROTOOPT", ITEM_LONG, (const char *) ENOPROTOOPT },
+	{ "EPROTONOSUPPORT", ITEM_LONG, (const char *) EPROTONOSUPPORT },
+	{ "ESOCKTNOSUPPORT", ITEM_LONG, (const char *) ESOCKTNOSUPPORT },
+	{ "EOPNOTSUPP", ITEM_LONG, (const char *) EOPNOTSUPP },
+	{ "EPFNOSUPPORT", ITEM_LONG, (const char *) EPFNOSUPPORT },
+	{ "EAFNOSUPPORT", ITEM_LONG, (const char *) EAFNOSUPPORT },
+	{ "EADDRINUSE", ITEM_LONG, (const char *) EADDRINUSE },
+	{ "EADDRNOTAVAIL", ITEM_LONG, (const char *) EADDRNOTAVAIL },
+	{ "ENETDOWN", ITEM_LONG, (const char *) ENETDOWN },
+	{ "ENETUNREACH", ITEM_LONG, (const char *) ENETUNREACH },
+	{ "ENETRESET", ITEM_LONG, (const char *) ENETRESET },
+	{ "ECONNABORTED", ITEM_LONG, (const char *) ECONNABORTED },
+	{ "ECONNRESET", ITEM_LONG, (const char *) ECONNRESET },
+	{ "ENOBUFS", ITEM_LONG, (const char *) ENOBUFS },
+	{ "EISCONN", ITEM_LONG, (const char *) EISCONN },
+	{ "ENOTCONN", ITEM_LONG, (const char *) ENOTCONN },
+	{ "ESHUTDOWN", ITEM_LONG, (const char *) ESHUTDOWN },
+	{ "ETIMEDOUT", ITEM_LONG, (const char *) ETIMEDOUT },
+	{ "ECONNREFUSED", ITEM_LONG, (const char *) ECONNREFUSED },
+	{ "EHOSTDOWN", ITEM_LONG, (const char *) EHOSTDOWN },
+	{ "EHOSTUNREACH", ITEM_LONG, (const char *) EHOSTUNREACH },
+#endif
 	{ "IP_TOS", ITEM_LONG, (const char *) IP_TOS },
 	{ "IP_TTL", ITEM_LONG, (const char *) IP_TTL },
 	{ "IP_HDRINCL", ITEM_LONG, (const char *) IP_HDRINCL },
@@ -114,6 +208,11 @@ const export_item_t *export_items_end =
 
 
 MODULE = Socket::Class::Const		PACKAGE = Socket::Class::Const
+
+BOOT:
+{
+	sv_setpvn( get_sv( "Socket::Class::Const::VERSION", TRUE ), "bundled", 7 );
+}
 
 void
 export( package, ... )

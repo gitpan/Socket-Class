@@ -52,7 +52,7 @@ foreach my $p( @ARGV ) {
 	'OBJECT' => '$(O_FILES)',
 	'XS' => {'Class.xs' => 'Class.c'},
 	'C' => ['sc_mod_def.c', 'socket_class.c', 'Class.c'],
-	'H' => ['c_module.h', 'sc_mod_def.h', 'socket_class.h'],
+	'H' => ['mod_sc.h', 'sc_mod_def.h', 'socket_class.h'],
 	'DIR' => [ 'xs' ],
 );
 

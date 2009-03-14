@@ -6,13 +6,7 @@
 #undef USE_SOCKETS_AS_HANDLES
 #include <XSUB.h>
 
-#include "c_module.h"
-
-#undef free
-#undef malloc
-#undef realloc
-#undef memcpy
-#undef calloc
+#include "mod_sc.h"
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -139,24 +133,25 @@ typedef unsigned short			sa_family_t;
 #undef open
 #undef close
 
-/* removing from perl */
-#undef Newx
-#undef Newxz
-#undef Safefree
-#undef Renew
-#undef Copy
-
 #if SC_DEBUG > 1
+
+/* memory debugger */
 
 extern HV				*hv_dbg_mem;
 extern perl_mutex		dbg_mem_lock;
+extern int				dbg_lock;
 
 void debug_init();
 void debug_free();
 
+#undef Newx
+#undef Newxz
+#undef Safefree
+#undef Renew
+
 #define Newx(v,n,t) { \
 	char __v[41], __msg[128]; \
-	MUTEX_LOCK( &dbg_mem_lock ); \
+	if( dbg_lock ) MUTEX_LOCK( &dbg_mem_lock ); \
 	(v) = ((t*) safemalloc( (size_t) (n) * sizeof(t) )); \
 	sprintf( __v, "0x%lx", (size_t) (v) ); \
 	sprintf( __msg, "0x%lx malloc(%lu * %lu) called at %s:%d", \
@@ -164,12 +159,12 @@ void debug_free();
 	_debug( "%s\n", __msg ); \
 	(void) hv_store( hv_dbg_mem, \
 		__v, (I32) strlen( __v ), newSVpvn( __msg, strlen( __msg ) ), 0 ); \
-	MUTEX_UNLOCK( &dbg_mem_lock ); \
+	if( dbg_lock ) MUTEX_UNLOCK( &dbg_mem_lock ); \
 }
 
 #define Newxz(v,n,t) { \
 	char __v[41], __msg[128]; \
-	MUTEX_LOCK( &dbg_mem_lock ); \
+	if( dbg_lock ) MUTEX_LOCK( &dbg_mem_lock ); \
 	(v) = ((t*) safecalloc( (size_t) (n), sizeof(t) )); \
 	sprintf( __v, "0x%lx", (size_t) (v) ); \
 	sprintf( __msg, "0x%lx calloc(%lu * %lu) called at %s:%d", \
@@ -177,12 +172,12 @@ void debug_free();
 	_debug( "%s\n", __msg ); \
 	(void) hv_store( hv_dbg_mem, \
 		__v, (I32) strlen( __v ), newSVpvn( __msg, strlen( __msg ) ), 0 ); \
-	MUTEX_UNLOCK( &dbg_mem_lock ); \
+	if( dbg_lock ) MUTEX_UNLOCK( &dbg_mem_lock ); \
 }
 
 #define Safefree(x) { \
 	char __v[41]; \
-	MUTEX_LOCK( &dbg_mem_lock ); \
+	if( dbg_lock ) MUTEX_LOCK( &dbg_mem_lock ); \
 	if( (x) != NULL ) { \
 		sprintf( __v, "0x%lx", (size_t) (x) ); \
 		_debug( "0x%lx free() called at %s:%d\n", \
@@ -190,13 +185,13 @@ void debug_free();
 		(void) hv_delete( hv_dbg_mem, __v, (I32) strlen( __v ), G_DISCARD ); \
 		safefree( (x) ); (x) = NULL; \
 	} \
-	MUTEX_UNLOCK( &dbg_mem_lock ); \
+	if( dbg_lock ) MUTEX_UNLOCK( &dbg_mem_lock ); \
 }
 
 #define Renew(v,n,t) { \
 	register void *__p = (v); \
 	char __v[41], __msg[128]; \
-	MUTEX_LOCK( &dbg_mem_lock ); \
+	if( dbg_lock ) MUTEX_LOCK( &dbg_mem_lock ); \
 	sprintf( __v, "0x%lx", (size_t) (v) ); \
 	(void) hv_delete( hv_dbg_mem, __v, (I32) strlen( __v ), G_DISCARD ); \
 	(v) = ((t*) saferealloc( __p, (size_t) (n) * sizeof(t) )); \
@@ -207,24 +202,11 @@ void debug_free();
 	_debug( "%s\n", __msg ); \
 	(void) hv_store( hv_dbg_mem, \
 		__v, (I32) strlen( __v ), newSVpvn( __msg, strlen( __msg ) ), 0 ); \
-	MUTEX_UNLOCK( &dbg_mem_lock ); \
+	if( dbg_lock ) MUTEX_UNLOCK( &dbg_mem_lock ); \
 }
 
-#else
+#endif /* SC_DEBUG > 1 */
 
-#define Newx(v,c,t) \
-	( (v) = ( (t*) malloc( (c) * sizeof(t) ) ) )
-#define Newxz(v,c,t) \
-	( (v) = ( (t*) calloc( (c), sizeof(t) ) ) )
-#define Safefree(x) \
-	if( (x) != NULL ) { free( (x) ); (x) = NULL; }
-#define Renew(v,n,t) \
-	( (v) = ( (t*) realloc( (void *) (v), (n) * sizeof(t) ) ) )
-
-#endif
-
-#define Copy(s,d,n,t) \
-	( memcpy( (char*)(d), (const char*)(s), (n) * sizeof(t) ) )
 
 #ifdef _WIN32
 
@@ -232,6 +214,7 @@ void debug_free();
 #define ECONNRESET				WSAECONNRESET
 #define EINPROGRESS				WSAEINPROGRESS
 #define ETIMEDOUT				WSAETIMEDOUT
+#define EADDRNOTAVAIL			WSAEADDRNOTAVAIL
 
 struct sockaddr_un {
 	sa_family_t					sun_family;				/* AF_UNIX */
@@ -245,8 +228,8 @@ struct sockaddr_un {
 #define ESOCKETBROKEN			1111
 
 #ifndef AF_INET6
-#define SC_OLDNET				1
 #define AF_INET6				23
+#define SC_OLDNET				1
 struct in6_addr {
 	uint8_t						s6_addr[16];
 };
@@ -296,7 +279,7 @@ struct st_sockaddr_bt {
 typedef struct st_sockaddr_bt			SOCKADDR_RFCOMM;
 typedef struct st_sockaddr_bt			SOCKADDR_L2CAP;
 
-#else
+#else /* POSIX */
 
 struct st_sockaddr_rc {
 	sa_family_t			bt_family;
@@ -311,11 +294,9 @@ struct st_sockaddr_l2 {
 typedef struct st_sockaddr_rc	SOCKADDR_RFCOMM;
 typedef struct st_sockaddr_l2	SOCKADDR_L2CAP;
 
-#endif
+#endif /* POSIX */
 
 typedef struct st_sc_sockaddr	my_sockaddr_t;
-
-#define MYSASIZE(sa)			((sa).l + sizeof(socklen_t))
 
 typedef struct st_socket_class {
 	struct st_socket_class		*prev, *next;
@@ -325,18 +306,18 @@ typedef struct st_socket_class {
 	int							s_type;
 	int							s_proto;
 	my_sockaddr_t				l_addr, r_addr;
-	char						*rcvbuf;
-	size_t						rcvbuf_len;
+	char						*buffer;
+	size_t						buffer_len;
 	int							state;
 	BYTE						non_blocking;
 	struct timeval				timeout;
 	char						*classname;
+	size_t						classname_len;
 	int							refcnt;
 	long						last_errno;
 	char						last_error[256];
-#ifdef USE_ITHREADS
-	perl_mutex					thread_lock;
-#endif
+	void						*user_data;
+	void						(*free_user_data) ( void *p );
 } socket_class_t;
 
 #define SC_CASCADE				31
@@ -359,55 +340,83 @@ extern sc_global_t global;
 
 #define GLOBAL_LOCK()			MUTEX_LOCK( &global.thread_lock )
 #define GLOBAL_UNLOCK()			MUTEX_UNLOCK( &global.thread_lock )
-#define SOCK_LOCK(tv)				MUTEX_LOCK( &tv->thread_lock )
-#define SOCK_UNLOCK(tv)			MUTEX_UNLOCK( &tv->thread_lock )
 
 #else
 
 #define GLOBAL_LOCK()
 #define GLOBAL_UNLOCK()
-#define SOCK_LOCK(tv)
-#define SOCK_UNLOCK(tv)
 
 #endif
 
-#define SOCK_ERRNOLAST(tv) \
-	SOCK_ERRNO(tv, Socket_errno())
-
-#define SOCK_ERRNO(tv,code) \
+#define SOCK_ERROR(sock,code,str) \
 	do { \
-		(tv)->last_error[0] = '\0'; \
-		(tv)->last_errno = code; \
+		(sock)->last_errno = code; \
+		if( str != NULL ) { \
+			my_strncpy( (sock)->last_error, str, sizeof((sock)->last_error) ); \
+		} \
+		else { \
+			(sock)->last_error[0] = '\0'; \
+		} \
 	} while( 0 )
 
-#define SOCK_ERROR(tv,str) \
+#define SOCK_ERRNO(sock,code) \
 	do { \
-		my_strncpy( (tv)->last_error, str, sizeof( (tv)->last_error ) ); \
-		(tv)->last_errno = -1; \
+		(sock)->last_errno = code; \
+		if( code > 0 ) { \
+			Socket_error( \
+				(sock)->last_error, sizeof( (sock)->last_error ), \
+				(sock)->last_errno \
+			); \
+		} \
+		else { \
+			(sock)->last_error[0] = '\0'; \
+		} \
 	} while( 0 )
+
+
+#define SOCK_ERRNOLAST(sock)	SOCK_ERRNO(sock, Socket_errno())
+
+/* cpan bug #43862: don't set $! directly */
 
 #define GLOBAL_ERROR(code,str) \
 	do { \
-		SV *__sv = get_sv( "!", TRUE ); \
 		global.last_errno = code; \
-		strncpy( global.last_error, str, sizeof(global.last_error) ); \
-		sv_setiv( __sv, (IV) code ); \
-		sv_setpv( __sv, global.last_error ); \
-		SvIOK_on( __sv ); \
+		if( str != NULL ) { \
+			my_strncpy( global.last_error, str, sizeof(global.last_error) ); \
+		} \
+		else { \
+			global.last_error[0] = '\0'; \
+		} \
 	} while( 0 )
+
+#ifdef _WIN32
+/* wont work !? */
+#define my_set_errno(code) \
+	do { \
+		errno = code; \
+		_set_errno( code ); \
+		SetLastError( (DWORD) code ); \
+	} while( 0 )
+#else
+#define my_set_errno(code)		errno = code
+#endif
 
 #define GLOBAL_ERRNO(code) \
 	do { \
-		SV *__sv = get_sv( "!", TRUE ); \
-		char __s[255]; \
+		my_set_errno( code ); \
 		global.last_errno = code; \
-		Socket_error( __s, sizeof(__s), code ); \
-		sv_setiv( __sv, (IV) code ); \
-		sv_setpv( __sv, __s ); \
-		SvIOK_on( __sv ); \
+		if( code > 0 ) { \
+			Socket_error( \
+				global.last_error, sizeof( global.last_error ), \
+				global.last_errno \
+			); \
+		} \
+		else { \
+			global.last_error[0] = '\0'; \
+		} \
 	} while( 0 )
 
-#define GLOBAL_ERRNOLAST()	GLOBAL_ERRNO(Socket_errno())
+#define GLOBAL_ERRNOLAST()		GLOBAL_ERRNO(Socket_errno())
 
 EXTERN void socket_class_add( socket_class_t *sc );
 EXTERN void socket_class_rem( socket_class_t *sc );
@@ -430,7 +439,7 @@ EXTERN int my_stricmp( const char *cs, const char *ct );
 
 EXTERN int inet_aton( const char *cp, struct in_addr *inp );
 
-#else
+#else /* ! _WIN32 */
 
 #define Socket_close(s) \
 	if( (s) != INVALID_SOCKET ) { \
@@ -439,7 +448,11 @@ EXTERN int inet_aton( const char *cp, struct in_addr *inp );
 
 #define Socket_errno()            errno
 
+#ifndef SC_OLDNET
+EXTERN int Socket_ai_errno( int code );
 #endif
+
+#endif /* ! _WIN32 */
 
 EXTERN void Socket_setaddr_UNIX( my_sockaddr_t *addr, const char *path );
 EXTERN int Socket_setaddr_INET(

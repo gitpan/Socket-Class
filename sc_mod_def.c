@@ -11,7 +11,7 @@ int mod_sc_create( char **args, int argc, sc_t **p_sc ) {
 	socklen_t sl;
 
 	if( argc % 2 ) {
-		GLOBAL_ERROR( -1, "invalid arguments" );
+		GLOBAL_ERRNO( EINVAL );
 		return SC_ERROR;
 	}
 	Newxz( sc, 1, socket_class_t );
@@ -118,15 +118,22 @@ int mod_sc_create( char **args, int argc, sc_t **p_sc ) {
 		default:
 			r = Socket_setaddr_INET( sc, la, lp, ADDRUSE_LISTEN );
 			if( r < 0 ) {
+				GLOBAL_LOCK();
 #ifndef _WIN32
 				GLOBAL_ERROR( r, sc->last_error );
+#ifndef SC_OLDNET
+				my_set_errno( Socket_ai_errno( r ) );
+#endif
 #else
 				GLOBAL_ERRNO( r );
 #endif
+				GLOBAL_UNLOCK();
 				goto error2;
 			}
 			else if( r != 0 ) {
+				GLOBAL_LOCK();
 				GLOBAL_ERRNO( r );
+				GLOBAL_UNLOCK();
 				goto error2;
 			}
 			break;
@@ -162,15 +169,22 @@ int mod_sc_create( char **args, int argc, sc_t **p_sc ) {
 		default:
 			r = Socket_setaddr_INET( sc, ra, rp, ADDRUSE_CONNECT );
 			if( r < 0 ) {
+				GLOBAL_LOCK();
 #ifndef _WIN32
 				GLOBAL_ERROR( r, sc->last_error );
+#ifndef SC_OLDNET
+				my_set_errno( Socket_ai_errno( r ) );
+#endif
 #else
 				GLOBAL_ERRNO( r );
 #endif
+				GLOBAL_UNLOCK();
 				goto error2;
 			}
 			else if( r != 0 ) {
+				GLOBAL_LOCK();
 				GLOBAL_ERRNO( r );
+				GLOBAL_UNLOCK();
 				goto error2;
 			}
 			break;
@@ -241,7 +255,7 @@ int mod_sc_create( char **args, int argc, sc_t **p_sc ) {
 			goto error;
 		sc->non_blocking = 1;
 	}
-	GLOBAL_ERROR( 0, "" );
+	GLOBAL_ERRNO( 0 );
 	socket_class_add( sc );
 	*p_sc = sc;
 	return SC_OK;
@@ -255,11 +269,10 @@ error2:
 int mod_sc_create_class( sc_t *socket, const char *pkg, SV **psv ) {
 	HV *hv;
 	SV *sv;
-	size_t len;
 	if( pkg != NULL && *pkg != '\0' ) {
-		len = strlen( pkg );
-		Renew( socket->classname, len + 1, char );
-		Copy( pkg, socket->classname, len + 1, char );
+		socket->classname_len = strlen( pkg );
+		Renew( socket->classname, socket->classname_len + 1, char );
+		Copy( pkg, socket->classname, socket->classname_len + 1, char );
 	}
 	else {
 		pkg = socket->classname != NULL ? socket->classname : "Socket::Class";
@@ -268,7 +281,7 @@ int mod_sc_create_class( sc_t *socket, const char *pkg, SV **psv ) {
 	if( hv == NULL ) {
 		snprintf( socket->last_error, sizeof( socket->last_error ),
 			"Invalid package '%s'", pkg );
-		socket->last_errno = -1;
+		socket->last_errno = -9999;
 		return SC_ERROR;
 	}
 	sv = sv_2mortal( (SV *) newHV() );
@@ -284,16 +297,33 @@ void mod_sc_destroy( sc_t *socket ) {
 	socket_class_rem( socket );
 }
 
-void mod_sc_destroy_class( SV *sv ) {
-	sc_t *socket = socket_class_find( sv );
-	if( socket == NULL )
-		return;
-	mod_sc_destroy( socket );
-	sv_2mortal( sv );
+int mod_sc_refcnt_dec( sc_t *socket ) {
+	socket->refcnt --;
+	if( socket->refcnt <= 0 ) {
+		if( socket->state == SC_STATE_CONNECTED )
+			shutdown( socket->sock, 2 );
+		socket_class_rem( socket );
+		return 0;
+	}
+	return socket->refcnt;
+}
+
+int mod_sc_refcnt_inc( sc_t *socket ) {
+	socket->refcnt ++;
+	return socket->refcnt;
 }
 
 sc_t *mod_sc_get_socket( SV *sv ) {
 	return socket_class_find( sv );
+}
+
+void mod_sc_set_userdata( sc_t *sock, void *p, void (*free) (void *p) ) {
+	sock->user_data = p;
+	sock->free_user_data = free;
+}
+
+void *mod_sc_get_userdata( sc_t *sock ) {
+	return sock->user_data;
 }
 
 int mod_sc_connect(
@@ -313,17 +343,15 @@ int mod_sc_connect(
 	default:
 		if( host == NULL && serv == NULL ) {
 			if( sock->state != SC_STATE_CLOSED ) {
-				sock->last_errno =
-					Socket_setaddr_INET( sock, NULL, NULL, ADDRUSE_CONNECT );
-				if( sock->last_errno != 0 )
-					goto error;
+				r = Socket_setaddr_INET( sock, NULL, NULL, ADDRUSE_CONNECT );
+				if( r != 0 )
+					return SC_ERROR;
 			}
 		}
 		else {
-			sock->last_errno =
-				Socket_setaddr_INET( sock, host, serv, ADDRUSE_CONNECT );
-			if( sock->last_errno != 0 )
-				goto error;
+			r = Socket_setaddr_INET( sock, host, serv, ADDRUSE_CONNECT );
+			if( r != 0 )
+				return SC_ERROR;
 		}
 		break;
 	case AF_UNIX:
@@ -345,8 +373,8 @@ int mod_sc_connect(
 		sock->sock = socket(
 			sock->s_domain, sock->s_type, sock->s_proto );
 		if( sock->sock == INVALID_SOCKET ) {
-			sock->last_errno = Socket_errno();
-			goto error;
+			SOCK_ERRNOLAST( sock );
+			return SC_ERROR;
 		}
 	}
 #ifdef SC_DEBUG
@@ -355,8 +383,8 @@ int mod_sc_connect(
 #endif
 	if( ! sock->non_blocking ) {
 		if( Socket_setblocking( sock->sock, 0 ) == SOCKET_ERROR ) {
-			sock->last_errno = Socket_errno();
-			goto error;
+			SOCK_ERRNOLAST( sock );
+			return SC_ERROR;
 		}
 	}
 	r = connect( sock->sock,
@@ -375,56 +403,54 @@ int mod_sc_connect(
 						sock->sock, SOL_SOCKET, SO_ERROR, (void*) (&r), &sl
 					) == SOCKET_ERROR
 				) {
-					sock->last_errno = Socket_errno();
-					goto error;
+					SOCK_ERRNOLAST( sock );
+					return SC_ERROR;
 				}
 				if( r ) {
 #ifdef SC_DEBUG
 					_debug( "getsockopt SO_ERROR %d\n", r );
 #endif
-					sock->last_errno = r;
-					goto error;
+					SOCK_ERRNO( sock, r );
+					return SC_ERROR;
 				}
 			}
 			else {
 #ifdef SC_DEBUG
 				_debug( "connect timed out %u\n", ETIMEDOUT );
 #endif
-				sock->last_errno = ETIMEDOUT;
-				goto error;
+				SOCK_ERRNO( sock, ETIMEDOUT );
+				return SC_ERROR;
 			}	
 		}
 		else {
 #ifdef SC_DEBUG
 			_debug( "connect failed %d\n", r );
 #endif
-			sock->last_errno = r;
-			goto error;
+			SOCK_ERRNO( sock, r );
+			return SC_ERROR;
 		}
 	}
 	if( ! sock->non_blocking ) {
 		if( Socket_setblocking( sock->sock, 1 ) == SOCKET_ERROR ) {
-			sock->last_errno = Socket_errno();
-			goto error;
+			SOCK_ERRNOLAST( sock );
+			return SC_ERROR;
 		}
 	}
 	sock->l_addr.l = SOCKADDR_SIZE_MAX;
 	getsockname( sock->sock,
 		(struct sockaddr *) sock->l_addr.a, &sock->l_addr.l );
 	sock->state = SC_STATE_CONNECTED;
-	sock->last_errno = 0;
+	SOCK_ERRNO( sock, 0 );
 	return SC_OK;
-error:
-	return SC_ERROR;
 }
 
 int mod_sc_shutdown( sc_t *sock, int how ) {
 	if( shutdown( sock->sock, how ) == SOCKET_ERROR ) {
-		sock->last_errno = Socket_errno();
+		SOCK_ERRNOLAST( sock );
 		sock->state = SC_STATE_ERROR;
 		return SC_ERROR;
 	}
-	sock->last_errno = 0;
+	SOCK_ERRNO( sock, 0 );
 	sock->state = SC_STATE_SHUTDOWN;
 	return SC_OK;
 }
@@ -434,6 +460,7 @@ int mod_sc_close( sc_t *sock ) {
 	if( sock->s_domain == AF_UNIX ) {
 		remove( ((struct sockaddr_un *) sock->l_addr.a)->sun_path );
 	}
+	SOCK_ERRNO( sock, 0 );
 	sock->state = SC_STATE_CLOSED;
 	memset( &sock->l_addr, 0, sizeof( sock->l_addr ) );
 	memset( &sock->r_addr, 0, sizeof( sock->r_addr ) );
@@ -441,23 +468,21 @@ int mod_sc_close( sc_t *sock ) {
 }
 
 int mod_sc_bind( sc_t *sock, const char *host, const char *serv ) {
-	sock->last_error[0] = '\0';
+	int r;
 	switch( sock->s_domain ) {
 	case AF_INET:
 	case AF_INET6:
 	default:
 		if( host == NULL && serv == NULL ) {
 			if( sock->state != SC_STATE_CLOSED ) {
-				sock->last_errno =
-					Socket_setaddr_INET( sock, NULL, NULL, ADDRUSE_LISTEN );
-				if( sock->last_errno != 0 )
+				r = Socket_setaddr_INET( sock, NULL, NULL, ADDRUSE_LISTEN );
+				if( r != 0 )
 					return SC_ERROR;
 			}
 		}
 		else {
-			sock->last_errno =
-				Socket_setaddr_INET( sock, host, serv, ADDRUSE_LISTEN );
-			if( sock->last_errno != 0 )
+			r = Socket_setaddr_INET( sock, host, serv, ADDRUSE_LISTEN );
+			if( r != 0 )
 				return SC_ERROR;
 		}
 		break;
@@ -476,30 +501,30 @@ int mod_sc_bind( sc_t *sock, const char *host, const char *serv ) {
 	if( sock->sock == INVALID_SOCKET ) {
 		sock->sock = socket( sock->s_domain, sock->s_type, sock->s_proto );
 		if( sock->sock == INVALID_SOCKET ) {
-			sock->last_errno = Socket_errno();
+			SOCK_ERRNOLAST( sock );
 			return SC_ERROR;
 		}
 	}
 	if( bind( sock->sock, (struct sockaddr *) sock->l_addr.a, sock->l_addr.l )
 		== SOCKET_ERROR
 	) {
-		sock->last_errno = Socket_errno();
+		SOCK_ERRNOLAST( sock );
 		return SC_ERROR;
 	}
 	getsockname( sock->sock,
 		(struct sockaddr *) sock->l_addr.a, &sock->l_addr.l );
 	sock->state = SC_STATE_BOUND;
-	sock->last_errno = 0;
+	SOCK_ERRNO( sock, 0 );
 	return SC_OK;
 }
 
 int mod_sc_listen( sc_t *sock, int queue ) {
-	if( listen( sock->sock, queue ) == SOCKET_ERROR ) {
+	if( listen( sock->sock, queue < 0 ? SOMAXCONN : queue ) == SOCKET_ERROR ) {
 		SOCK_ERRNOLAST( sock );
 		return SC_ERROR;
 	}
-	SOCK_ERRNO( sock, 0 );
 	sock->state = SC_STATE_LISTEN;
+	SOCK_ERRNO( sock, 0 );
 	return SC_OK;
 }
 
@@ -507,21 +532,23 @@ int mod_sc_accept( sc_t *sock, sc_t **client ) {
 	socket_class_t *sc2;
 	SOCKET s;
 	my_sockaddr_t addr;
+	int r;
 	addr.l = SOCKADDR_SIZE_MAX;
 	s = accept( sock->sock, (struct sockaddr *) addr.a, &addr.l );
-	if( s == INVALID_SOCKET ) {			
-		SOCK_ERRNOLAST( sock );
-		switch( sock->last_errno ) {
+	if( s == INVALID_SOCKET ) {
+		r = Socket_errno();
+		switch( r ) {
 		case EWOULDBLOCK:
 			/* threat not as an error */
-			sock->last_errno = 0;
+			SOCK_ERRNO( sock, 0 );
 			*client = NULL;
 			return SC_OK;
 		default:
 #ifdef SC_DEBUG
-			_debug( "accept error %u\n", sock->last_errno );
+			_debug( "accept error %d\n", r );
 #endif
 			sock->state = SC_STATE_ERROR;
+			SOCK_ERRNO( sock, r );
 			return SC_ERROR;
 		}
 	}
@@ -531,9 +558,14 @@ int mod_sc_accept( sc_t *sock, sc_t **client ) {
 	sc2->s_proto = sock->s_proto;
 	sc2->sock = s;
 	sc2->state = SC_STATE_CONNECTED;
-	Copy( &addr, &sc2->r_addr, MYSASIZE( addr ), BYTE );
+	Copy( &addr, &sc2->r_addr, SC_ADDR_SIZE( addr ), BYTE );
 	sc2->l_addr.l = SOCKADDR_SIZE_MAX;
 	getsockname( s, (struct sockaddr *) sc2->l_addr.a, &sc2->l_addr.l );
+	if( sock->classname != NULL ) {
+		sc2->classname_len = sock->classname_len;
+		Renew( sc2->classname, sc2->classname_len + 1, char );
+		Copy( sock->classname, sc2->classname, sc2->classname_len + 1, char );
+	}
 	socket_class_add( sc2 );
 #ifdef SC_DEBUG
 	_debug( "accepted socket %d sc %lu\n", s, sc2->id );
@@ -544,36 +576,30 @@ int mod_sc_accept( sc_t *sock, sc_t **client ) {
 
 int mod_sc_recv( sc_t *sock, char *buf, int len, int flags, int *p_len ) {
 	int r;
-	/*
-	if( sock->rcvbuf_len < len ) {
-		sock->rcvbuf_len = len;
-		Renew( sock->rcvbuf, len, char );
-	}
-	*/
 	r = recv( sock->sock, buf, (int) len, flags );
 	if( r == SOCKET_ERROR ) {
-		SOCK_ERRNOLAST( sock );
-		switch( sock->last_errno ) {
+		switch( r = Socket_errno() ) {
 		case EWOULDBLOCK:
 			/* threat not as an error */
-			sock->last_errno = 0;
+			SOCK_ERRNO( sock, 0 );
 			*p_len = 0;
 			return SC_OK;
 		default:
-#ifdef SC_DEBUG
-			_debug( "recv error %u\n", sock->last_errno );
-#endif
-			sock->state = SC_STATE_ERROR;
-			return SC_ERROR;
+			SOCK_ERRNO( sock, r );
+			goto error;
 		}
 	}
 	else if( r != 0 ) {
-		sock->last_errno = 0;
 		*p_len = r;
+		SOCK_ERRNO( sock, 0 );
 		return SC_OK;
 	}
-	sock->last_errno = ECONNRESET;
+	SOCK_ERRNO( sock, ECONNRESET );
+error:
 	sock->state = SC_STATE_ERROR;
+#ifdef SC_DEBUG
+	_debug( "recv error %d\n", sock->last_errno );
+#endif
 	return SC_ERROR;
 }
 
@@ -581,31 +607,28 @@ int mod_sc_send( sc_t *sock, const char *buf, int len, int flags, int *p_len ) {
 	int r;
 	r = send( sock->sock, buf, len, flags );
 	if( r == SOCKET_ERROR ) {
-		SOCK_ERRNOLAST( sock );
-		switch( sock->last_errno ) {
+		switch( r = Socket_errno() ) {
 		case EWOULDBLOCK:
 			/* threat not as an error */
-			sock->last_errno = 0;
+			SOCK_ERRNO( sock, 0 );
 			*p_len = 0;
 			return SC_OK;
 		default:
-#ifdef SC_DEBUG
-			_debug( "send error %u\n", sock->last_errno );
-#endif
-			sock->state = SC_STATE_ERROR;
-			return SC_ERROR;
+			SOCK_ERRNO( sock, r );
+			goto error;
 		}
 	}
 	else if( r != 0 ) {
-		sock->last_errno = 0;
 		*p_len = r;
+		SOCK_ERRNO( sock, 0 );
 		return SC_OK;
 	}
-	sock->last_errno = ECONNRESET;
-#ifdef SC_DEBUG
-	_debug( "send error %u\n", sock->last_errno );
-#endif
+	SOCK_ERRNO( sock, ECONNRESET );
+error:
 	sock->state = SC_STATE_ERROR;
+#ifdef SC_DEBUG
+	_debug( "send error %d\n", sock->last_errno );
+#endif
 	return SC_ERROR;
 }
 
@@ -614,33 +637,32 @@ int mod_sc_recvfrom( sc_t *sock, char *buf, int len, int flags, int *p_len ) {
 	sc_addr_t peer;
 	peer.l = SOCKADDR_SIZE_MAX;
 	r = recvfrom(
-		sock->sock, buf, len, flags,
-		(struct sockaddr *) peer.a, &peer.l
+		sock->sock, buf, len, flags, (struct sockaddr *) peer.a, &peer.l
 	);
 	if( r == SOCKET_ERROR ) {
-		SOCK_ERRNOLAST( sock );
-		switch( sock->last_errno ) {
+		switch( r = Socket_errno() ) {
 		case EWOULDBLOCK:
 			/* threat not as an error */
-			sock->last_errno = 0;
 			*p_len = 0;
+			SOCK_ERRNO( sock, 0 );
 			return SC_OK;
 		default:
-#ifdef SC_DEBUG
-			_debug( "recvfrom error %u\n", sock->last_errno );
-#endif
-			sock->state = SC_STATE_ERROR;
-			return SC_ERROR;
+			SOCK_ERRNO( sock, ECONNRESET );
+			goto error;
 		}
 	}
 	else if( r != 0 ) {
-		sock->last_errno = 0;
 		*p_len = r;
 		/* remember who we received from */
 		Copy( &peer, &sock->r_addr, peer.l + sizeof( int ), BYTE );
+		SOCK_ERRNO( sock, 0 );
 		return SC_OK;
 	}
-	sock->last_errno = ECONNRESET;
+	SOCK_ERRNO( sock, ECONNRESET );
+error:
+#ifdef SC_DEBUG
+	_debug( "recvfrom error %u\n", sock->last_errno );
+#endif
 	sock->state = SC_STATE_ERROR;
 	return SC_ERROR;
 }
@@ -651,7 +673,7 @@ int mod_sc_sendto(
 	int r;
 	if( peer != NULL ) {
 		/* remember who we send to */
-		Copy( peer, &sock->r_addr, MYSASIZE( *peer ), BYTE );
+		Copy( peer, &sock->r_addr, SC_ADDR_SIZE( *peer ), BYTE );
 	}
 	else {
 		peer = &sock->r_addr;
@@ -659,27 +681,27 @@ int mod_sc_sendto(
 	r = sendto(
 		sock->sock, buf, len, flags, (struct sockaddr *) peer->a, peer->l );
 	if( r == SOCKET_ERROR ) {
-		SOCK_ERRNOLAST( sock );
-		switch( sock->last_errno ) {
+		switch( r = Socket_errno() ) {
 		case EWOULDBLOCK:
 			/* threat not as an error */
-			sock->last_errno = 0;
 			*p_len = 0;
+			SOCK_ERRNO( sock, 0 );
 			return SC_OK;
 		default:
-#ifdef SC_DEBUG
-			_debug( "sendto error %u\n", sock->last_errno );
-#endif
-			sock->state = SC_STATE_ERROR;
-			return SC_ERROR;
+			SOCK_ERRNO( sock, r );
+			goto error;
 		}
 	}
 	else if( r != 0 ) {
-		sock->last_errno = 0;
 		*p_len = r;
+		SOCK_ERRNO( sock, 0 );
 		return SC_OK;
 	}
-	sock->last_errno = ECONNRESET;
+	SOCK_ERRNO( sock, ECONNRESET );
+error:
+#ifdef SC_DEBUG
+	_debug( "sendto error %u\n", sock->last_errno );
+#endif
 	sock->state = SC_STATE_ERROR;
 	return SC_ERROR;
 }
@@ -688,59 +710,59 @@ int mod_sc_read( sc_t *sock, char *buf, int len, int *p_len ) {
 	int r;
 	r = recv( sock->sock, buf, len, 0 );
 	if( r == SOCKET_ERROR ) {
-		SOCK_ERRNOLAST( sock );
-		switch( sock->last_errno ) {
+		switch( r = Socket_errno() ) {
 		case EWOULDBLOCK:
 			/* threat not as an error */
-			sock->last_errno = 0;
 			*p_len = 0;
+			SOCK_ERRNO( sock, 0 );
 			return SC_OK;
 		default:
-#ifdef SC_DEBUG
-			_debug( "read error %u\n", sock->last_errno );
-#endif
-			sock->state = SC_STATE_ERROR;
-			return SC_ERROR;
+			SOCK_ERRNO( sock, r );
+			goto error;
 		}
 	}
-	else if( r == 0 ) {
-		sock->last_errno = ECONNRESET;
-#ifdef SC_DEBUG
-		_debug( "read error %u\n", sock->last_errno );
-#endif
-		sock->state = SC_STATE_ERROR;
-		return SC_ERROR;
+	else if( r != 0 ) {
+		*p_len = r;
+		SOCK_ERRNO( sock, 0 );
+		return SC_OK;
 	}
-	sock->last_errno = 0;
-	*p_len = r;
-	return SC_OK;
+	SOCK_ERRNO( sock, ECONNRESET );
+error:
+#ifdef SC_DEBUG
+	_debug( "read error %u\n", sock->last_errno );
+#endif
+	sock->state = SC_STATE_ERROR;
+	return SC_ERROR;
 }
 
 int mod_sc_write( sc_t *sock, const char *buf, int len, int *p_len ) {
 	int r = Socket_write( sock, buf, len );
-	if( r != SOCKET_ERROR ) {
-		*p_len = r;
-		return SC_OK;
-	}
-	return SC_ERROR;
+	if( r == SOCKET_ERROR )
+		return SC_ERROR;
+	*p_len = r;
+	SOCK_ERRNO( sock, 0 );
+	return SC_OK;
 }
 
 int mod_sc_writeln( sc_t *sock, const char *buf, int len, int *p_len ) {
-	char *tmp;
+	char *p;
 	int r;
 	if( len <= 0 )
 		len = (int) strlen( buf );
-	Newx( tmp, len + 2, char );
-	Copy( buf, tmp, len, char );
-	tmp[len ++] = '\r';
-	tmp[len ++] = '\n';
-	r = Socket_write( sock, buf, len );
-	Safefree( tmp );
-	if( r != SOCKET_ERROR ) {
-		*p_len = r;
-		return SC_OK;
+	if( sock->buffer_len < (size_t) len + 2 ) {
+		sock->buffer_len = (size_t) len + 2;
+		Renew( sock->buffer, len, char );
 	}
-	return SC_ERROR;
+	p = sock->buffer;
+	Copy( buf, p, len, char );
+	p[len ++] = '\r';
+	p[len ++] = '\n';
+	r = Socket_write( sock, p, len );
+	if( r == SOCKET_ERROR )
+		return SC_ERROR;
+	*p_len = r;
+	SOCK_ERRNO( sock, 0 );
+	return SC_OK;
 }
 
 int mod_sc_printf( sc_t *sock, const char *fmt, ... ) {
@@ -846,43 +868,38 @@ finish:
 int mod_sc_readline( sc_t *sock, char **p_buf, int *p_len ) {
 	int r;
 	size_t i, pos = 0, len = 256;
-	char *p;
-	p = sock->rcvbuf;
+	char *p, ch;
+	p = sock->buffer;
 	while( 1 ) {
-		if( sock->rcvbuf_len < pos + len ) {
-			sock->rcvbuf_len = pos + len;
-			Renew( sock->rcvbuf, sock->rcvbuf_len, char );
-			p = sock->rcvbuf + pos;
+		if( sock->buffer_len < pos + len ) {
+			sock->buffer_len = pos + len;
+			Renew( sock->buffer, sock->buffer_len, char );
+			p = sock->buffer + pos;
 		}
 		r = recv( sock->sock, p, (int) len, MSG_PEEK );
+#ifdef SC_DEBUG
+		_debug( "recv MSG_PEEK %d = %d\n", len, r );
+#endif
 		if( r == SOCKET_ERROR ) {
 			if( pos > 0 )
 				break;
-			sock->last_errno = Socket_errno();
-			switch( sock->last_errno ) {
+			switch( r = Socket_errno() ) {
 			case EWOULDBLOCK:
 				/* threat not as an error */
-				sock->last_errno = 0;
-				sock->rcvbuf[0] = '\0';
-				*p_buf = sock->rcvbuf;
+				sock->buffer[0] = '\0';
+				*p_buf = sock->buffer;
 				*p_len = 0;
+				SOCK_ERRNO( sock, 0 );
 				return SC_OK;
 			}
-#ifdef SC_DEBUG
-			_debug( "readline error %u\n", sock->last_errno );
-#endif
-			sock->state = SC_STATE_ERROR;
-			return SC_ERROR;
+			SOCK_ERRNO( sock, r );
+			goto error;
 		}
 		else if( r == 0 ) {
 			if( pos > 0 )
 				break;
-			sock->last_errno = ECONNRESET;
-#ifdef SC_DEBUG
-			_debug( "readline error %u\n", sock->last_errno );
-#endif
-			sock->state = SC_STATE_ERROR;
-			return SC_ERROR;
+			SOCK_ERRNO( sock, ECONNRESET );
+			goto error;
 		}
 		for( i = 0; i < (size_t) r; i ++, p ++ ) {
 			if( *p != '\n' && *p != '\r' && *p != '\0' )
@@ -891,32 +908,39 @@ int mod_sc_readline( sc_t *sock, char **p_buf, int *p_len ) {
 #ifdef SC_DEBUG
 			_debug( "found newline at %d + %d of %d\n", pos, i, r );
 #endif
-			sock->rcvbuf[pos + i] = '\0';
-			*p_buf = sock->rcvbuf;
+			ch = *p;
+			*p = '\0';
+			*p_buf = sock->buffer;
 			*p_len = (int) (pos + i);
-			if( *p == '\r' ) {
+			if( ch == '\r' || ch == '\n' ) {
 				if( i < (size_t) r ) {
-					if( p[1] == '\n' )
+					if( p[1] == (ch == '\r' ? '\n' : '\r') )
 						i ++;
 				}
 				else if( r == (int) len ) {
 					r = recv( sock->sock, p, 1, MSG_PEEK );
-					if( r == 1 && *p == '\n' )
+					if( r == 1 && *p == (ch == '\r' ? '\n' : '\r') )
 						recv( sock->sock, p, 1, 0 );
 				}
 			}
-			recv( sock->sock, sock->rcvbuf + pos, (int) i + 1, 0 );
+			recv( sock->sock, sock->buffer + pos, (int) i + 1, 0 );
 			return SC_OK;
 		}
-		recv( sock->sock, sock->rcvbuf + pos, (int) i, 0 );
+		recv( sock->sock, sock->buffer + pos, (int) i, 0 );
 		pos += i;
 		if( r < (int) len )
 			break;
 	}
-	sock->rcvbuf[pos] = '\0';
-	*p_buf = sock->rcvbuf;
+	sock->buffer[pos] = '\0';
+	*p_buf = sock->buffer;
 	*p_len = (int) pos;
 	return SC_OK;
+error:
+#ifdef SC_DEBUG
+	_debug( "readline error %u\n", sock->last_errno );
+#endif
+	sock->state = SC_STATE_ERROR;
+	return SC_ERROR;
 }
 
 int mod_sc_available( sc_t *sock, int *p_len ) {
@@ -925,7 +949,7 @@ int mod_sc_available( sc_t *sock, int *p_len ) {
 	char *tmp;
 	r = getsockopt( sock->sock, SOL_SOCKET, SO_RCVBUF, (char *) &len, &ol );
 	if( r != 0 ) {
-		sock->last_errno = Socket_errno();
+		SOCK_ERRNOLAST( sock );
 		sock->state = SC_STATE_ERROR;
 		return SC_ERROR;
 	}
@@ -933,20 +957,21 @@ int mod_sc_available( sc_t *sock, int *p_len ) {
 	r = recv( sock->sock, tmp, len, MSG_PEEK );
 	switch( r ) {
 	case SOCKET_ERROR:
-		sock->last_errno = Socket_errno();
-		switch( sock->last_errno ) {
+		switch( r = Socket_errno() ) {
 		case EWOULDBLOCK:
 			/* threat not as an error */
-			sock->last_errno = 0;
 			r = 0;
+			SOCK_ERRNO( sock, 0 );
 			break;
 		default:
+			SOCK_ERRNO( sock, r );
 			sock->state = SC_STATE_ERROR;
 			Safefree( tmp );
 			return SC_ERROR;
 		}
+		break;
 	case 0:
-		sock->last_errno = ECONNRESET;
+		SOCK_ERRNO( sock, ECONNRESET );
 		sock->state = SC_STATE_ERROR;
 		Safefree( tmp );
 		return SC_ERROR;
@@ -997,12 +1022,10 @@ _default:
 #ifdef SC_DEBUG
 			_debug( "getaddrinfo('%s', '%s') failed %d\n", host, serv, r );
 #endif
-			SOCK_ERRNO( sock, r );
 #ifndef _WIN32
-			{
-				const char *s1 = gai_strerror( r );
-				strncpy( sock->last_error, s1, sizeof( sock->last_error ) );
-			}
+			SOCK_ERROR( sock, r, gai_strerror( r ) );
+#else
+			SOCK_ERRNO( sock, r );
 #endif
 			return SC_ERROR;
 		}
@@ -1074,7 +1097,7 @@ _default:
 				return SC_ERROR;
 			}
 			if( he->h_addrtype != AF_INET6 ) {
-				SOCK_ERROR( sock, "invalid address family type" );
+				SOCK_ERROR( sock, -9999, "Invalid address family type" );
 				GLOBAL_UNLOCK();
 				return SC_ERROR;
 			}
@@ -1103,7 +1126,7 @@ _default:
 		return SC_OK;
 	default:
 _default:
-		SOCK_ERROR( sock, "invalid address type" );
+		SOCK_ERROR( sock, -9999, "Invalid address type" );
 		return SC_ERROR;
 #endif
 	}
@@ -1186,7 +1209,7 @@ bt_noport:
 		}
 		break;
 	default:
-		SOCK_ERROR( sock, "invalid address" );
+		SOCK_ERRNO( sock, EADDRNOTAVAIL );
 		return SC_ERROR;
 	}
 	return SC_OK;
@@ -1215,10 +1238,10 @@ int mod_sc_gethostbyaddr(
 	);
 	if( r != 0 ) {
 #ifndef _WIN32
-		const char *s1 = gai_strerror( r );
-		strncpy( sock->last_error, s1, sizeof( sock->last_error ) );
+		SOCK_ERROR( sock, r, gai_strerror( r ) );
+#else
+		SOCK_ERRNO( sock, r );
 #endif
-		sock->last_errno = r;
 		return SC_ERROR;
 	}
 	*host_len = (int) strlen( host );
@@ -1279,10 +1302,10 @@ int mod_sc_gethostbyname(
 	r = getaddrinfo( name, "", &aih, &ail );
 	if( r != 0 ) {
 #ifndef _WIN32
-		const char *s1 = gai_strerror( r );
-		strncpy( sock->last_error, s1, sizeof( sock->last_error ) );
+		SOCK_ERROR( sock, r, gai_strerror( r ) );
+#else
+		SOCK_ERRNO( sock, r );
 #endif
-		sock->last_errno = r;
 		return SC_ERROR;
 	}
 	switch( ail->ai_family ) {
@@ -1461,15 +1484,18 @@ int mod_sc_getaddrinfo(
 #endif
 		if( sock != NULL ) {
 #ifndef _WIN32
-			const char *s1 = gai_strerror( r );
-			strncpy( sock->last_error, s1, sizeof(sock->last_error) );
+			SOCK_ERROR( sock, r, gai_strerror( r ) );
+#else
+			SOCK_ERRNO( sock, r );
 #endif
-			sock->last_errno = r;
 		}
 		else {
 			GLOBAL_LOCK();
 #ifndef _WIN32
 			GLOBAL_ERROR( r, gai_strerror( r ) );
+#ifndef SC_OLDNET
+			my_set_errno( Socket_ai_errno( r ) );
+#endif
 #else
 			GLOBAL_ERRNO( r );
 #endif
@@ -1484,17 +1510,19 @@ int mod_sc_getaddrinfo(
 	}
 	else {
 		GLOBAL_LOCK();
-		GLOBAL_ERROR( 0, "" );
+		GLOBAL_ERRNO( 0 );
 		GLOBAL_UNLOCK();
 	}
 	return SC_OK;
 #else /* SC_OLDNET */
 	if( sock != NULL ) {
-		SOCK_ERROR( sock, "getaddrinfo() is not supported" );
+		SOCK_ERROR( sock, -9999,
+			"getaddrinfo() is not supported by your system" );
 	}
 	else {
 		GLOBAL_LOCK();
-		GLOBAL_ERROR( -1, "getaddrinfo() is not supported" );
+		GLOBAL_ERROR( -9999,
+			"getaddrinfo() is not supported by your system" );
 		GLOBAL_UNLOCK();
 	}
 	return SC_ERROR;
@@ -1530,14 +1558,18 @@ int mod_sc_getnameinfo(
 #endif
 		if( sock != NULL ) {
 #ifndef _WIN32
-			const char *s1 = gai_strerror( r );
-			strncpy( sock->last_error, s1, sizeof( sock->last_error ) );
+			SOCK_ERROR( sock, r, gai_strerror( r ) );
+#else
+			SOCK_ERRNO( sock, r );
 #endif
-			sock->last_errno = r;
 		}
 		else {
+			GLOBAL_LOCK();
 #ifndef _WIN32
 			GLOBAL_ERROR( r, gai_strerror( r ) );
+#ifndef SC_OLDNET
+			my_set_errno( Socket_ai_errno( r ) );
+#endif
 #else
 			GLOBAL_ERRNO( r );
 #endif
@@ -1550,17 +1582,19 @@ int mod_sc_getnameinfo(
 	}
 	else {
 		GLOBAL_LOCK();
-		GLOBAL_ERROR( 0, "" );
+		GLOBAL_ERRNO( 0 );
 		GLOBAL_UNLOCK();
 	}
 	return SC_OK;
 #else /* SC_OLDNET */
 	if( sock != NULL ) {
-		SOCK_ERROR( sock, "getnameinfo() is not supported" );
+		SOCK_ERROR( sock, -9999,
+			"getnameinfo() is not supported by your system" );
 	}
 	else {
 		GLOBAL_LOCK();
-		GLOBAL_ERROR( -1, "getnameinfo() is not supported" );
+		GLOBAL_ERROR( -9999,
+			"getnameinfo() is not supported by your system" );
 		GLOBAL_UNLOCK();
 	}
 	return SC_ERROR;
@@ -1690,7 +1724,7 @@ int mod_sc_is_readable( sc_t *sock, double timeout, int *readable ) {
 	int r;
 	FD_ZERO( &fd_socks );
 	FD_SET( sock->sock, &fd_socks );
-	if( timeout > 0 ) {
+	if( timeout >= 0 ) {
 		t.tv_sec = (long) (timeout / 1000);
 		t.tv_usec = (long) (timeout * 1000) % 1000000;
 		r = select(
@@ -1721,7 +1755,7 @@ int mod_sc_is_writable( sc_t *sock, double timeout, int *writable ) {
 	int r;
 	FD_ZERO( &fd_socks );
 	FD_SET( sock->sock, &fd_socks );
-	if( timeout > 0 ) {
+	if( timeout >= 0 ) {
 		t.tv_sec = (long) (timeout / 1000);
 		t.tv_usec = (long) (timeout * 1000) % 1000000;
 		r = select(
@@ -1770,12 +1804,13 @@ int mod_sc_select(
 		FD_ZERO( &fde );
 		FD_SET( sock->sock, &fde );
 	}
-	if( ! timeout )
-		pt = NULL;
-	else {
+	if( timeout >= 0 ) {
 		t.tv_sec = (long) (timeout / 1000);
 		t.tv_usec = (long) (timeout * 1000) % 1000000;
 		pt = &t;
+	}
+	else {
+		pt = NULL;
 	}
 	r = select(
 		(int) (sock->sock + 1), (dr ? &fdr : NULL), (dw ? &fdw : NULL),
@@ -1828,6 +1863,10 @@ SOCKET mod_sc_get_handle( sc_t *sock ) {
 
 int mod_sc_get_state( sc_t *sock ) {
 	return sock->state;
+}
+
+void mod_sc_set_state( sc_t *sock, int state ) {
+	sock->state = state;
 }
 
 int mod_sc_get_family( sc_t *sock ) {
@@ -2045,7 +2084,7 @@ unknown_proto:
 			break;
 		}
 	}
-	if( s1 + 1 < se )
+	if( s1 + 1 >= se )
 		goto exit;
 	*s1 ++ = ')';
 	*s1 = '\0';
@@ -2059,21 +2098,7 @@ int mod_sc_get_errno( sc_t *socket ) {
 }
 
 const char *mod_sc_get_error( sc_t *socket ) {
-	if( socket != NULL ) {
-		if( socket->last_errno > 0 )
-			Socket_error(
-				socket->last_error, sizeof( socket->last_error ),
-				socket->last_errno
-			);
-		return socket->last_error;
-	}
-	GLOBAL_LOCK();
-	if( global.last_errno > 0 )
-		Socket_error(
-			global.last_error, sizeof( global.last_error ), global.last_errno
-		);
-	GLOBAL_UNLOCK();
-	return global.last_error;
+	return socket == NULL ? global.last_error : socket->last_error;
 }
 
 void mod_sc_set_errno( sc_t *sock, int code ) {
@@ -2083,11 +2108,18 @@ void mod_sc_set_errno( sc_t *sock, int code ) {
 		GLOBAL_ERRNO( code );
 }
 
-void mod_sc_set_error( sc_t *sock, const char *str ) {
-	if( sock != NULL )
-		SOCK_ERROR( sock, str );
-	else
-		GLOBAL_ERROR( -1, str );
+void mod_sc_set_error( sc_t *sock, int code, const char *fmt, ... ) {
+	va_list vl;
+	va_start( vl, fmt );
+	if( sock != NULL ) {
+		sock->last_errno = code;
+		vsnprintf( sock->last_error, sizeof(sock->last_error), fmt, vl );
+	}
+	else {
+		global.last_errno = code;
+		vsnprintf( global.last_error, sizeof(global.last_error), fmt, vl );
+	}
+	va_end( vl );
 }
 
 const mod_sc_t mod_sc = {
@@ -2095,14 +2127,13 @@ const mod_sc_t mod_sc = {
 	mod_sc_create,
 	mod_sc_create_class,
 	mod_sc_destroy,
-	mod_sc_destroy_class,
 	mod_sc_get_socket,
 	mod_sc_connect,
-	mod_sc_shutdown,
-	mod_sc_close,
 	mod_sc_bind,
 	mod_sc_listen,
 	mod_sc_accept,
+	mod_sc_shutdown,
+	mod_sc_close,
 	mod_sc_recv,
 	mod_sc_send,
 	mod_sc_recvfrom,
@@ -2141,6 +2172,7 @@ const mod_sc_t mod_sc = {
 	mod_sc_sleep,
 	mod_sc_get_handle,
 	mod_sc_get_state,
+	mod_sc_set_state,
 	mod_sc_local_addr,
 	mod_sc_remote_addr,
 	mod_sc_get_family,
@@ -2151,4 +2183,8 @@ const mod_sc_t mod_sc = {
 	mod_sc_get_error,
 	mod_sc_set_errno,
 	mod_sc_set_error,
+	mod_sc_set_userdata,
+	mod_sc_get_userdata,
+	mod_sc_refcnt_dec,
+	mod_sc_refcnt_inc,
 };

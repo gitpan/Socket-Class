@@ -1,9 +1,8 @@
-#include "c_module.h"
+#include "mod_sc.h"
 
 int mod_sc_create_class( sc_t *socket, const char *pkg, SV **psv );
 int mod_sc_create( char **args, int argc, sc_t **p_sc );
 void mod_sc_destroy( sc_t *socket );
-void mod_sc_destroy_class( SV *sv );
 sc_t *mod_sc_get_socket( SV *sv );
 int mod_sc_connect(
 	sc_t *sock, const char *host, const char *serv, double timeout
@@ -92,6 +91,8 @@ int mod_sc_to_string( sc_t *sock, char *str, size_t *size );
 int mod_sc_get_errno( sc_t *socket );
 const char *mod_sc_get_error( sc_t *socket );
 void mod_sc_set_errno( sc_t *sock, int code );
-void mod_sc_set_error( sc_t *sock, const char *str );
+void mod_sc_set_error( sc_t *sock, int code, const char *fmt, ... );
+int mod_sc_refcnt_inc( sc_t *socket );
+int mod_sc_refcnt_dec( sc_t *socket );
 
 extern const mod_sc_t mod_sc;

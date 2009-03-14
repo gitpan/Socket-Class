@@ -1,12 +1,19 @@
 Revision history for Perl extension Socket::Class.
 
-version 1.99_01 (toward 2.0 release)
+version 1.99_11
+    - fixed bug #43862 (thx to SZBALINT for detailed report)
+    - updated documentation
+    - removed Const2.pm and Asynch.pm from distribution
+    - updated xs/c api for the first extension
+    - fixed various things
+
+version 1.99_10 (toward 2.0 release)
     - added a XS / C module interface
-	- changed perl type of the class from scalar to hashref (for sub classing)
-	  .. key field '_sc_' is used to identify the class internally
-	- moved the constant module to XS
-	- constants can now be exported as const sub or as variables like before
-	- incompatibility changes in socket state constants
+    - changed perl type of the class from scalar to hashref (for sub classing)
+      .. key field '_sc_' is used to identify the class internally
+    - moved the constant module to XS
+    - constants can now be exported as const sub or as variables like before
+    - incompatibility changes in socket state constants
       .. renamed state constants from SOS_* to SC_STATE_*
 
 version 1.24 (unreleased)

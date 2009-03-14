@@ -1,5 +1,41 @@
-#ifndef _SOCKET_CLASS_C_MODULE_H_
-#define _SOCKET_CLASS_C_MODULE_H_ 1
+#ifndef _MOD_SC_H_
+#define _MOD_SC_H_ 1
+
+/* don't use perl memory functions
+ * to avoid false alerts like "free to wrong pool..."
+ * when using threads
+ */
+#undef free
+#undef malloc
+#undef realloc
+#undef memcpy
+#undef calloc
+
+/* perl macros must redefined */
+#undef Newx
+#undef Newxz
+#undef Safefree
+#undef Renew
+#undef Copy
+#undef Move
+
+#define Newx(v,c,t) \
+	( (v) = ( (t*) malloc( (c) * sizeof(t) ) ) )
+
+#define Newxz(v,c,t) \
+	( (v) = ( (t*) calloc( (c), sizeof(t) ) ) )
+
+#define Safefree(x) \
+	if( (x) != NULL ) { free( (x) ); (x) = NULL; }
+
+#define Renew(v,n,t) \
+	( (v) = ( (t*) realloc( (void *) (v), (n) * sizeof(t) ) ) )
+
+#define Copy(s,d,n,t) \
+	( memcpy( (char*)(d), (const char*)(s), (n) * sizeof(t) ) )
+
+#define Move(s,d,n,t) \
+	( memmove( (char*)(d), (const char*)(s), (n) * sizeof(t) ) )
 
 #ifdef _WIN32
 
@@ -49,6 +85,7 @@
 #define NI_MAXSERV				32
 #endif
 
+/* Socket::Class states */
 #define SC_STATE_INIT			0
 #define SC_STATE_BOUND			1
 #define SC_STATE_LISTEN			2
@@ -57,6 +94,7 @@
 #define SC_STATE_CLOSED			5
 #define SC_STATE_ERROR			99
 
+/* mod_sc return codes */
 #define SC_OK					0
 #define SC_ERROR				1
 
@@ -66,6 +104,8 @@ struct st_sc_sockaddr {
 	socklen_t					l;
 	char						a[SOCKADDR_SIZE_MAX];
 };
+
+#define SC_ADDR_SIZE(sa)		((sa).l + sizeof(socklen_t))
 
 struct st_sc_addrinfo {
 	int							ai_flags;
@@ -81,23 +121,22 @@ struct st_sc_addrinfo {
 
 typedef struct st_socket_class		sc_t;
 typedef struct st_sc_sockaddr		sc_addr_t;
-typedef struct st_mod_sc			mod_sc_t;
 typedef struct st_sc_addrinfo		sc_addrinfo_t;
+typedef struct st_mod_sc			mod_sc_t;
 
 struct st_mod_sc {
-	const char *version; /* XS_VERSION */
+	const char *sc_version; /* XS_VERSION */
 	int (*sc_create) ( char **args, int argc, sc_t **socket );
 	int (*sc_create_class) ( sc_t *sock, const char *pkg, SV **psv );
 	void (*sc_destroy) ( sc_t *sock );
-	void (*sc_destroy_class) ( SV *sv );
-	sc_t *(*sc_get_socket) ( SV *sv );
+	sc_t *(*sc_get_socket) ( SV *object );
 	int (*sc_connect)
 		( sc_t *sock, const char *host, const char *serv, double timeout );
-	int (*sc_shutdown) ( sc_t *sock, int how );
-	int (*sc_close) ( sc_t *sock );
 	int (*sc_bind) ( sc_t *sock, const char *host, const char *serv );
 	int (*sc_listen) ( sc_t *sock, int queue );
 	int (*sc_accept) ( sc_t *sock, sc_t **client );
+	int (*sc_shutdown) ( sc_t *sock, int how );
+	int (*sc_close) ( sc_t *sock );
 	int (*sc_recv) ( sc_t *sock, char *buf, int len, int flags, int *p_len );
 	int (*sc_send) ( sc_t *sock, const char *buf, int len, int flags, int *p_len );
 	int (*sc_recvfrom) ( sc_t *sock, char *buf, int len, int flags, int *p_len );
@@ -160,6 +199,7 @@ struct st_mod_sc {
 	void (*sc_sleep) ( double ms );
 	SOCKET (*sc_get_handle) ( sc_t *sock );
 	int (*sc_get_state) ( sc_t *sock );
+	void (*sc_set_state) ( sc_t *sock, int state );
 	int (*sc_local_addr) ( sc_t *sock, sc_addr_t *addr );
 	int (*sc_remote_addr) ( sc_t *sock, sc_addr_t *addr );
 	int (*sc_get_family) ( sc_t *sock );
@@ -169,7 +209,11 @@ struct st_mod_sc {
 	int (*sc_get_errno) ( sc_t *sock );
 	const char *(*sc_get_error) ( sc_t *sock );
 	void (*sc_set_errno) ( sc_t *sock, int code );
-	void (*sc_set_error) ( sc_t *sock, const char *str );
+	void (*sc_set_error) ( sc_t *sock, int code, const char *fmt, ... );
+	void (*sc_set_userdata) ( sc_t *sock, void *p, void (*free) (void *p) );
+	void * (*sc_get_userdata) ( sc_t *sock );
+	int (*sc_refcnt_dec) ( sc_t *socket );
+	int (*sc_refcnt_inc) ( sc_t *socket );
 };
 
-#endif /* _SOCKET_CLASS_C_MODULE_H_ */
+#endif /* _MOD_SC_H_ */

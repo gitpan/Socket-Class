@@ -110,7 +110,7 @@ PPCODE:
 	for( i = 0; i < SC_CASCADE; i ++ ) {
 		for( sc = global.first_socket[i]; sc != NULL; sc = sc->next ) {
 #ifdef SC_DEBUG
-			_debug( "CLONE called for sc %lu ref: %d\n", sc->id, sc->refcnt );
+			_debug( "CLONE called for sc %lu refcnt: %d\n", sc->id, sc->refcnt );
 #endif
 			sc->refcnt ++;
 		}
@@ -130,17 +130,12 @@ DESTROY( this, ... )
 PREINIT:
 	socket_class_t *sc;
 PPCODE:
-	if( (sc = socket_class_find( this )) == NULL )
+	if( (sc = mod_sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
 #ifdef SC_DEBUG
-	_debug( "DESTROY called for sc %lu ref: %d\n", sc->id, sc->refcnt );
+	_debug( "DESTROY called for sc %lu refcnt: %d\n", sc->id, sc->refcnt );
 #endif
-	sc->refcnt --;
-	if( sc->refcnt < 0 ) {
-		if( sc->state == SC_STATE_CONNECTED )
-			shutdown( sc->sock, 2 );
-		socket_class_rem( sc );
-	}
+	mod_sc_refcnt_dec( sc );
 
 
 #/*****************************************************************************
@@ -171,9 +166,8 @@ PPCODE:
 	/* create the class */
 	r = mod_sc_create_class( sc, SvPV_nolen( class ), &sv );
 	if( r != SC_OK ) {
+		mod_sc_set_error( NULL, sc->last_errno, sc->last_error );
 		mod_sc_destroy( sc );
-		my_strcpy( global.last_error, sc->last_error );
-		global.last_errno = sc->last_errno;
 		XSRETURN_EMPTY;
 	}
 	ST(0) = sv_2mortal( sv );
@@ -312,7 +306,7 @@ PREINIT:
 PPCODE:
 	if( (sc = mod_sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
-	if( mod_sc_listen( sc, queue ) != SC_OK )
+	if( mod_sc_listen( sc, queue < 0 ? SOMAXCONN : queue ) != SC_OK )
 		XSRETURN_EMPTY;
 	XSRETURN_YES;
 
@@ -359,15 +353,15 @@ PREINIT:
 PPCODE:
 	if( (sc = mod_sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
-	if( sc->rcvbuf_len < len ) {
-		sc->rcvbuf_len = len;
-		Renew( sc->rcvbuf, len, char );
+	if( sc->buffer_len < len ) {
+		sc->buffer_len = len;
+		Renew( sc->buffer, len, char );
 	}
-	if( mod_sc_recv( sc, sc->rcvbuf, len, flags, &rlen ) != SC_OK )
+	if( mod_sc_recv( sc, sc->buffer, len, flags, &rlen ) != SC_OK )
 		XSRETURN_EMPTY;
 	if( rlen == 0 )
 		XSRETURN_NO;
-	sv_setpvn( buf, sc->rcvbuf, rlen );
+	sv_setpvn( buf, sc->buffer, rlen );
 	XSRETURN_IV( rlen );
 
 
@@ -412,17 +406,17 @@ PREINIT:
 PPCODE:
 	if( (sc = mod_sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
-	if( sc->rcvbuf_len < len ) {
-		sc->rcvbuf_len = len;
-		Renew( sc->rcvbuf, len, char );
+	if( sc->buffer_len < len ) {
+		sc->buffer_len = len;
+		Renew( sc->buffer, len, char );
 	}
-	if( mod_sc_recvfrom( sc, sc->rcvbuf, (int) len, flags, &rlen ) != SC_OK )
+	if( mod_sc_recvfrom( sc, sc->buffer, (int) len, flags, &rlen ) != SC_OK )
 		XSRETURN_EMPTY;
 	if( rlen == 0 )
 		XSRETURN_NO;
-	sv_setpvn( buf, sc->rcvbuf, rlen );
+	sv_setpvn( buf, sc->buffer, rlen );
 	ST(0) = sv_2mortal( newSVpvn(
-		(char *) &sc->r_addr, MYSASIZE( sc->r_addr ) ) );
+		(char *) &sc->r_addr, SC_ADDR_SIZE( sc->r_addr ) ) );
 	XSRETURN(1);
 
 
@@ -447,7 +441,7 @@ PPCODE:
 		XSRETURN_EMPTY;
 	if( to != NULL && SvPOK( to ) ) {
 		peer = (my_sockaddr_t *) SvPVbyte( to, len );
-		if( len < sizeof( int ) || len != MYSASIZE(*peer) ) {
+		if( len < sizeof( int ) || len != SC_ADDR_SIZE(*peer) ) {
 			snprintf(
 				sc->last_error, sizeof( sc->last_error ),
 				"Invalid address"
@@ -471,22 +465,22 @@ void
 read( this, buf, len )
 	SV *this;
 	SV *buf;
-	int len;
+	unsigned int len;
 PREINIT:
 	socket_class_t *sc;
 	int rlen;
 PPCODE:
 	if( (sc = mod_sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
-	if( sc->rcvbuf_len < len ) {
-		sc->rcvbuf_len = len;
-		Renew( sc->rcvbuf, len, char );
+	if( sc->buffer_len < len ) {
+		sc->buffer_len = len;
+		Renew( sc->buffer, len, char );
 	}
-	if( mod_sc_read( sc, sc->rcvbuf, len, &rlen ) != SC_OK )
+	if( mod_sc_read( sc, sc->buffer, len, &rlen ) != SC_OK )
 		XSRETURN_EMPTY;
 	if( rlen == 0 )
 		XSRETURN_NO;
-	sv_setpvn( buf, sc->rcvbuf, rlen );
+	sv_setpvn( buf, sc->buffer, rlen );
 	XSRETURN_IV( rlen );
 
 
@@ -534,6 +528,26 @@ PPCODE:
 	if( len == 0 )
 		XSRETURN_NO;
 	XSRETURN_IV( len );
+
+
+#/*****************************************************************************
+# * readline( this )
+# *****************************************************************************/
+
+void
+readline( this )
+	SV *this;
+PREINIT:
+	socket_class_t *sc;
+	int rlen;
+	char *rbuf;
+PPCODE:
+	if( (sc = mod_sc_get_socket( this )) == NULL )
+		XSRETURN_EMPTY;
+	if( mod_sc_readline( sc, &rbuf, &rlen ) != SC_OK )
+		XSRETURN_EMPTY;
+	ST(0) = sv_2mortal( newSVpvn( rbuf, rlen ) );
+	XSRETURN(1);
 
 
 #/*****************************************************************************
@@ -599,26 +613,6 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * readline( this )
-# *****************************************************************************/
-
-void
-readline( this )
-	SV *this;
-PREINIT:
-	socket_class_t *sc;
-	int rlen;
-	char *rbuf;
-PPCODE:
-	if( (sc = mod_sc_get_socket( this )) == NULL )
-		XSRETURN_EMPTY;
-	if( mod_sc_readline( sc, &rbuf, &rlen ) != SC_OK )
-		XSRETURN_EMPTY;
-	ST(0) = sv_2mortal( newSVpvn( rbuf, rlen ) );
-	XSRETURN(1);
-
-
-#/*****************************************************************************
 # * available( this )
 # *****************************************************************************/
 
@@ -658,7 +652,7 @@ PPCODE:
 		s2 = NULL;
 	if( mod_sc_pack_addr( sc, s1, s2, &saddr ) != SC_OK )
 		XSRETURN_EMPTY;
-	ST(0) = sv_2mortal( newSVpvn( (char *) &saddr, MYSASIZE(saddr) ) );
+	ST(0) = sv_2mortal( newSVpvn( (char *) &saddr, SC_ADDR_SIZE(saddr) ) );
 	XSRETURN(1);
 
 
@@ -680,7 +674,7 @@ PPCODE:
 	if( (sc = mod_sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
 	saddr = (my_sockaddr_t *) SvPVbyte( paddr, len );
-	if( len < sizeof( int ) || len != MYSASIZE(*saddr) ) {
+	if( len < sizeof( int ) || len != SC_ADDR_SIZE(*saddr) ) {
 		snprintf(
 			sc->last_error, sizeof( sc->last_error ),
 			"Invalid address"
@@ -717,7 +711,7 @@ PPCODE:
 	if( addr != NULL ) {
 		s1 = SvPV( addr, l1 );
 		saddr = (my_sockaddr_t *) s1;
-		if( l1 <= sizeof( int ) || l1 != MYSASIZE(*saddr) ) {
+		if( l1 <= sizeof( int ) || l1 != SC_ADDR_SIZE(*saddr) ) {
 			if( mod_sc_pack_addr( sc, s1, NULL, &sa2 ) != SC_OK )
 				XSRETURN_EMPTY;
 			saddr = &sa2;
@@ -843,7 +837,7 @@ PPCODE:
 		saddr.l = (socklen_t) ai->ai_addrlen;
 		memcpy( saddr.a, ai->ai_addr, ai->ai_addrlen );
 		(void) hv_store( hv,
-			"paddr", 5, newSVpvn( (char *) &saddr, MYSASIZE(saddr) ), 0 );
+			"paddr", 5, newSVpvn( (char *) &saddr, SC_ADDR_SIZE(saddr) ), 0 );
 		if( ai->ai_cnamelen )
 			(void) hv_store( hv, "canonname", 9,
 				newSVpvn( ai->ai_canonname, ai->ai_cnamelen ), 0 );
@@ -960,7 +954,7 @@ PPCODE:
 	if( items - ipos < 1 )
 		Perl_croak( aTHX_ "Usage: Socket::Class::getnameinfo(addr, ...)" );
 	psaddr = (my_sockaddr_t *) SvPVbyte( ST(ipos), len );
-	if( len > sizeof( int ) && len == MYSASIZE(*psaddr) ) {
+	if( len > sizeof( int ) && len == SC_ADDR_SIZE(*psaddr) ) {
 		/* packed address */
 		ipos ++;
 		if( ipos < items ) {
@@ -1429,7 +1423,7 @@ PREINIT:
 PPCODE:
 	if( (sc = mod_sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
-	ms = timeout != NULL ? SvNV( timeout ) : 0;
+	ms = timeout != NULL ? SvNV( timeout ) : -1;
 	if( mod_sc_is_readable( sc, ms, &readable ) != SC_OK )
 		XSRETURN_EMPTY;
 	ST(0) = readable ? &PL_sv_yes : &PL_sv_no;
@@ -1451,7 +1445,7 @@ PREINIT:
 PPCODE:
 	if( (sc = mod_sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
-	ms = timeout != NULL ? SvNV( timeout ) : 0;
+	ms = timeout != NULL ? SvNV( timeout ) : -1;
 	if( mod_sc_is_writable( sc, ms, &writable ) != SC_OK )
 		XSRETURN_EMPTY;
 	ST(0) = writable ? &PL_sv_yes : &PL_sv_no;
@@ -1479,7 +1473,7 @@ PPCODE:
 	vr = dr = read != NULL && SvTRUE( read );
 	vw = dw = write != NULL && SvTRUE( write );
 	ve = de = except != NULL && SvTRUE( except );
-	ms = timeout != NULL ? SvNV( timeout ) : 0;
+	ms = timeout != NULL ? SvNV( timeout ) : -1;
 	if( mod_sc_select( sc, &vr, &vw, &ve, ms ) != SC_OK )
 		XSRETURN_EMPTY;
 	if( dr && ! SvREADONLY( read ) )

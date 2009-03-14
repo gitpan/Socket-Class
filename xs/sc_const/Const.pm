@@ -4,13 +4,12 @@ package Socket::Class::Const;
 #use strict;
 #use warnings;
 
-our( $VERSION, $ExportLevel );
+our( $ExportLevel );
 
 BEGIN {
-	$VERSION = '1.99_10';
 	require Socket::Class unless $Socket::Class::VERSION;
 	require XSLoader;
-	XSLoader::load( __PACKAGE__, $VERSION );
+	XSLoader::load( __PACKAGE__, '1' );
 	$ExportLevel = 0;
 }
 
