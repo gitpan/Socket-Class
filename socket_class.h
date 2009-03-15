@@ -393,7 +393,6 @@ extern sc_global_t global;
 /* wont work !? */
 #define my_set_errno(code) \
 	do { \
-		_debug( "set errno %d\n", code ); \
 		errno = code; \
 		_set_errno( code ); \
 		_set_doserrno( code ); \

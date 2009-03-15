@@ -1,5 +1,8 @@
 Revision history for Perl extension Socket::Class.
 
+version 2.01
+    - repaired dirty build
+
 version 2.0
     - added support for freebsd
 
