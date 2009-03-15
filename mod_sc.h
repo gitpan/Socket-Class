@@ -11,7 +11,7 @@
 #undef memcpy
 #undef calloc
 
-/* perl macros must redefined */
+/* have to redefine perl macros */
 #undef Newx
 #undef Newxz
 #undef Safefree

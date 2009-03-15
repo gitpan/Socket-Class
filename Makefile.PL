@@ -5,7 +5,7 @@ use Config;
 
 my %os_supported = (
 	'linux' => 1, 'MSWin32' => 1, 'darwin' => 1, 'cygwin' => 1, 'aix' => 1,
-	'solaris' => 1, 'os390' => 1, 'hpux' => 1
+	'solaris' => 1, 'os390' => 1, 'hpux' => 1, 'freebsd' => 1,
 );
 
 if( ! $os_supported{$^O} ) {
@@ -80,6 +80,8 @@ if( $^O eq 'MSWin32' ) {
 	if( $r < 3 ) {
 		$_MAKEOPTS{'DEFINE'} .= ' -DSC_OLDNET';
 	}
+	# bug #37639
+	$ExtUtils::MM_Win32::Config{'ccversion'} = 13;
 }
 else {
 	@_IP = qw(/usr/local/include /usr/include /opt/include);

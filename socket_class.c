@@ -150,30 +150,53 @@ INLINE void Socket_error( char *str, DWORD len, long num ) {
 
 #ifndef SC_OLDNET
 
-/* interpet an ai errno as system errno */
+/* map ai errno to system errno */
 INLINE int Socket_ai_errno( int code ) {
 	switch( code ) {
+#ifdef EAI_ADDRFAMILY
 	case EAI_ADDRFAMILY:
-	case EAI_FAMILY:
 		return EAFNOSUPPORT;
+#endif
+#ifdef EAI_AGAIN
 	case EAI_AGAIN:
 		return EAGAIN;
+#endif
+#ifdef EAI_BADFLAGS
 	case EAI_BADFLAGS:
 		return EINVAL;
+#endif
+#ifdef EAI_FAIL
 	case EAI_FAIL:
 		return EOPNOTSUPP;
+#endif
+#ifdef EAI_FAMILY
+	case EAI_FAMILY:
+		return EAFNOSUPPORT;
+#endif
+#ifdef EAI_MEMORY
 	case EAI_MEMORY:
 		return ENOMEM;
+#endif
+#ifdef EAI_NODATA
 	case EAI_NODATA:
 		return ENODATA;
+#endif
+#ifdef EAI_NONAME
 	case EAI_NONAME:
 		return ENXIO;
+#endif
+#ifdef EAI_SERVICE
 	case EAI_SERVICE:
 		return ENODEV;
+#endif
+#ifdef EAI_SOCKTYPE
 	case EAI_SOCKTYPE:
 		return ESOCKTNOSUPPORT;
+#endif
+#ifdef EAI_SYSTEM
 	case EAI_SYSTEM:
 		return errno;
+#endif
 #ifdef EAI_OVERFLOW
 	case EAI_OVERFLOW:
 		return EOVERFLOW;

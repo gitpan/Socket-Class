@@ -24,6 +24,8 @@ my %makeopts = (
 if( $^O eq 'MSWin32' ) {
 	$makeopts{'DEFINE'} .= ' -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS';
 	$makeopts{'LIBS'}[0] = '-lws2_32';
+	# cpan bug #37639
+	$ExtUtils::MM_Win32::Config{'ccversion'} = 13;
 }
 elsif( $^O eq 'cygwin' ) {
 	$makeopts{'LIBS'}[0] = '-L/lib/w32api -lole32 -lversion -lws2_32';
