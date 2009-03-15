@@ -4,12 +4,13 @@ package Socket::Class::Const;
 #use strict;
 #use warnings;
 
-our( $ExportLevel );
+our( $VERSION, $ExportLevel );
 
 BEGIN {
+	$VERSION = '2.02';
 	require Socket::Class unless $Socket::Class::VERSION;
 	require XSLoader;
-	XSLoader::load( __PACKAGE__, '1' );
+	XSLoader::load( __PACKAGE__, $VERSION );
 	$ExportLevel = 0;
 }
 
@@ -111,11 +112,11 @@ The ICMP protocol
 
 =item B<IPPROTO_TCP>
 
-TCP protocol. Use together with $SOCK_STREAM.
+TCP protocol. Use together with SOCK_STREAM.
 
 =item B<IPPROTO_UDP>
 
-UDP protocol. Use together with $SOCK_DGRAM.
+UDP protocol. Use together with SOCK_DGRAM.
 
 =back
 

@@ -7,7 +7,7 @@ use strict;
 
 my %makeopts = (
 	'NAME' => 'Socket::Class::Const',
-	'VERSION' => '1',
+	'VERSION_FROM' => 'Const.pm',
 	'ABSTRACT' => 'Socket Class Constants',
 	'LIBS' => [],
 	'DEFINE' => '',
