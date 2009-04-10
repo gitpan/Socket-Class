@@ -158,6 +158,7 @@ Options:
     --help                 print this message
     --debug[=LEVEL]        compile with debug messages enabled (level 1-2)
     --verbose              enable MakeMakers verbosity
+    --openssl-dir=DIR      path to the OpenSSL Toolkit
 
 EOTH
 	exit 256;

@@ -1,5 +1,11 @@
 Revision history for Perl extension Socket::Class.
 
+version 2.10
+    - Socket::Class::SSL is now a part of this module
+    - fixed broken read in the SSL module
+    - completely removed the use of global error variable $! via errno
+    - updated documentation
+
 version 2.02
     - fixed version number in Socket::Class::Const to get indexed on CPAN
 

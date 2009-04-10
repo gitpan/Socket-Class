@@ -121,9 +121,6 @@ int mod_sc_create( char **args, int argc, sc_t **p_sc ) {
 				GLOBAL_LOCK();
 #ifndef _WIN32
 				GLOBAL_ERROR( r, sc->last_error );
-#ifndef SC_OLDNET
-				my_set_errno( Socket_ai_errno( r ) );
-#endif
 #else
 				GLOBAL_ERRNO( r );
 #endif
@@ -172,9 +169,6 @@ int mod_sc_create( char **args, int argc, sc_t **p_sc ) {
 				GLOBAL_LOCK();
 #ifndef _WIN32
 				GLOBAL_ERROR( r, sc->last_error );
-#ifndef SC_OLDNET
-				my_set_errno( Socket_ai_errno( r ) );
-#endif
 #else
 				GLOBAL_ERRNO( r );
 #endif
@@ -1493,9 +1487,6 @@ int mod_sc_getaddrinfo(
 			GLOBAL_LOCK();
 #ifndef _WIN32
 			GLOBAL_ERROR( r, gai_strerror( r ) );
-#ifndef SC_OLDNET
-			my_set_errno( Socket_ai_errno( r ) );
-#endif
 #else
 			GLOBAL_ERRNO( r );
 #endif
@@ -1567,9 +1558,6 @@ int mod_sc_getnameinfo(
 			GLOBAL_LOCK();
 #ifndef _WIN32
 			GLOBAL_ERROR( r, gai_strerror( r ) );
-#ifndef SC_OLDNET
-			my_set_errno( Socket_ai_errno( r ) );
-#endif
 #else
 			GLOBAL_ERRNO( r );
 #endif
@@ -2121,6 +2109,15 @@ void mod_sc_set_error( sc_t *sock, int code, const char *fmt, ... ) {
 	}
 	va_end( vl );
 }
+
+/*
+void *mod_sc_get_function( int fnc ) {
+	switch( fnc ) {
+	case 1:
+		return mod_sc_create;
+	}
+}
+*/
 
 const mod_sc_t mod_sc = {
 	XS_VERSION,

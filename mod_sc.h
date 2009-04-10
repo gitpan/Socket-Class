@@ -5,13 +5,14 @@
  * to avoid false alerts like "free to wrong pool..."
  * when using threads
  */
+
 #undef free
 #undef malloc
 #undef realloc
-#undef memcpy
 #undef calloc
+#undef memcpy
+#undef memmove
 
-/* have to redefine perl macros */
 #undef Newx
 #undef Newxz
 #undef Safefree
@@ -32,10 +33,12 @@
 	( (v) = ( (t*) realloc( (void *) (v), (n) * sizeof(t) ) ) )
 
 #define Copy(s,d,n,t) \
-	( memcpy( (char*)(d), (const char*)(s), (n) * sizeof(t) ) )
+	( memcpy( (char *) (d), (const char *) (s), (n) * sizeof(t) ) )
 
 #define Move(s,d,n,t) \
-	( memmove( (char*)(d), (const char*)(s), (n) * sizeof(t) ) )
+	( memmove( (char *) (d), (const char *) (s), (n) * sizeof(t) ) )
+
+/* end of memory definition */
 
 #ifdef _WIN32
 

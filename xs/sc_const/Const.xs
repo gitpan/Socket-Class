@@ -14,8 +14,8 @@ typedef struct st_export_item {
 	enum export_item_type			type;
 	union {
 		const char					*function;
-		long				value;
-	};
+		long						value;
+	} w;
 } export_item_t;
 
 const export_item_t export_items[] = {
@@ -43,7 +43,7 @@ const export_item_t export_items[] = {
 	{ "EAI_SERVICE", ITEM_LONG, (const char *) 10109 },
 	{ "EAI_SOCKTYPE", ITEM_LONG, (const char *) 10044 },
 	{ "EAI_SYSTEM", ITEM_LONG, (const char *) 0 },
-#else
+#else /* POSIX */
 	{ "EAI_ADDRFAMILY", ITEM_LONG, (const char *) -9 },
 	{ "EAI_AGAIN", ITEM_LONG, (const char *) -3 },
 	{ "EAI_BADFLAGS", ITEM_LONG, (const char *) -1 },
@@ -55,7 +55,7 @@ const export_item_t export_items[] = {
 	{ "EAI_SERVICE", ITEM_LONG, (const char *) -8 },
 	{ "EAI_SOCKTYPE", ITEM_LONG, (const char *) -7 },
 	{ "EAI_SYSTEM", ITEM_LONG, (const char *) -11 },
-#endif
+#endif /* POSIX */
 #if defined _WIN32
 	{ "EINTR", ITEM_LONG, (const char *) WSAEINTR },
 	{ "EACCES", ITEM_LONG, (const char *) WSAEACCES },
@@ -90,7 +90,7 @@ const export_item_t export_items[] = {
 	{ "ECONNREFUSED", ITEM_LONG, (const char *) WSAECONNREFUSED },
 	{ "EHOSTDOWN", ITEM_LONG, (const char *) WSAEHOSTDOWN },
 	{ "EHOSTUNREACH", ITEM_LONG, (const char *) WSAEHOSTUNREACH },
-#else
+#else /* POSIX */
 	{ "EINTR", ITEM_LONG, (const char *) EINTR },
 	{ "EACCES", ITEM_LONG, (const char *) EACCES },
 	{ "EFAULT", ITEM_LONG, (const char *) EFAULT },
@@ -124,7 +124,7 @@ const export_item_t export_items[] = {
 	{ "ECONNREFUSED", ITEM_LONG, (const char *) ECONNREFUSED },
 	{ "EHOSTDOWN", ITEM_LONG, (const char *) EHOSTDOWN },
 	{ "EHOSTUNREACH", ITEM_LONG, (const char *) EHOSTUNREACH },
-#endif
+#endif /* POSIX */
 	{ "IP_TOS", ITEM_LONG, (const char *) IP_TOS },
 	{ "IP_TTL", ITEM_LONG, (const char *) IP_TTL },
 	{ "IP_HDRINCL", ITEM_LONG, (const char *) IP_HDRINCL },
@@ -241,12 +241,12 @@ PPCODE:
 					switch( item->type ) {
 					case ITEM_LONG:
 						newCONSTSUB( stash,
-							item->name, newSViv( (IV) item->value ) );
+							item->name, newSViv( (IV) item->w.value ) );
 						break;
 					case ITEM_CODE:
-						sv = (SV *) get_cv( item->function, 0 );
+						sv = (SV *) get_cv( item->w.function, 0 );
 						if( sv == NULL ) {
-							s2 = item->function;
+							s2 = item->w.function;
 							goto not_found;
 						}
 						len = (STRLEN) strlen( item->name );
@@ -281,18 +281,18 @@ PPCODE:
 				if( make_var ) {
 					Renew( tmp, pkg_len + len + 1, char );
 					Copy( str, tmp + pkg_len, len + 1, char );
-					sv_setiv( get_sv( tmp, TRUE ), (IV) item->value );
+					sv_setiv( get_sv( tmp, TRUE ), (IV) item->w.value );
 				}
 				else {
-					newCONSTSUB( stash, str, newSViv( (IV) item->value ) );
+					newCONSTSUB( stash, str, newSViv( (IV) item->w.value ) );
 				}
 				break;
 			case ITEM_CODE:
 				if( make_var )
 					goto not_found;
-				sv = (SV *) get_cv( item->function, 0 );
+				sv = (SV *) get_cv( item->w.function, 0 );
 				if( sv == NULL ) {
-					s2 = item->function;
+					s2 = item->w.function;
 					goto not_found;
 				}
 				(void) hv_store( stash, str, (I32) len, sv, 0 );

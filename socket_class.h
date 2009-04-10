@@ -152,7 +152,7 @@ void debug_free();
 #define Newx(v,n,t) { \
 	char __v[41], __msg[128]; \
 	if( dbg_lock ) MUTEX_LOCK( &dbg_mem_lock ); \
-	(v) = ((t*) safemalloc( (size_t) (n) * sizeof(t) )); \
+	(v) = ((t*) malloc( (size_t) (n) * sizeof(t) )); \
 	sprintf( __v, "0x%lx", (size_t) (v) ); \
 	sprintf( __msg, "0x%lx malloc(%lu * %lu) called at %s:%d", \
 		(size_t) (v), (size_t) (n), sizeof(t), __FILE__, __LINE__ ); \
@@ -165,7 +165,7 @@ void debug_free();
 #define Newxz(v,n,t) { \
 	char __v[41], __msg[128]; \
 	if( dbg_lock ) MUTEX_LOCK( &dbg_mem_lock ); \
-	(v) = ((t*) safecalloc( (size_t) (n), sizeof(t) )); \
+	(v) = ((t*) calloc( (size_t) (n), sizeof(t) )); \
 	sprintf( __v, "0x%lx", (size_t) (v) ); \
 	sprintf( __msg, "0x%lx calloc(%lu * %lu) called at %s:%d", \
 		(size_t) (v), (size_t) (n), sizeof(t), __FILE__, __LINE__ ); \
@@ -183,7 +183,7 @@ void debug_free();
 		_debug( "0x%lx free() called at %s:%d\n", \
 			(size_t) (x), __FILE__, __LINE__ ); \
 		(void) hv_delete( hv_dbg_mem, __v, (I32) strlen( __v ), G_DISCARD ); \
-		safefree( (x) ); (x) = NULL; \
+		free( (x) ); (x) = NULL; \
 	} \
 	if( dbg_lock ) MUTEX_UNLOCK( &dbg_mem_lock ); \
 }
@@ -194,7 +194,7 @@ void debug_free();
 	if( dbg_lock ) MUTEX_LOCK( &dbg_mem_lock ); \
 	sprintf( __v, "0x%lx", (size_t) (v) ); \
 	(void) hv_delete( hv_dbg_mem, __v, (I32) strlen( __v ), G_DISCARD ); \
-	(v) = ((t*) saferealloc( __p, (size_t) (n) * sizeof(t) )); \
+	(v) = ((t*) realloc( __p, (size_t) (n) * sizeof(t) )); \
 	sprintf( __v, "0x%lx", (size_t) (v) ); \
 	sprintf( __msg, "0x%lx realloc(0x%lx, %lu * %lu) called at %s:%d", \
 		(size_t) (v), (size_t) __p, (size_t) (n), sizeof(t), \
@@ -389,22 +389,8 @@ extern sc_global_t global;
 		} \
 	} while( 0 )
 
-#ifdef _WIN32
-/* wont work !? */
-#define my_set_errno(code) \
-	do { \
-		errno = code; \
-		_set_errno( code ); \
-		_set_doserrno( code ); \
-		SetLastError( (DWORD) code ); \
-	} while( 0 )
-#else
-#define my_set_errno(code)		errno = code
-#endif
-
 #define GLOBAL_ERRNO(code) \
 	do { \
-		my_set_errno( code ); \
 		global.last_errno = code; \
 		if( code > 0 ) { \
 			Socket_error( \
@@ -448,10 +434,6 @@ EXTERN int inet_aton( const char *cp, struct in_addr *inp );
 	}
 
 #define Socket_errno()            errno
-
-#ifndef SC_OLDNET
-EXTERN int Socket_ai_errno( int code );
-#endif
 
 #endif /* ! _WIN32 */
 
