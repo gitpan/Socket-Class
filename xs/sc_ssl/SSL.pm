@@ -9,7 +9,7 @@ use Socket::Class;
 our( $VERSION, @ISA );
 
 BEGIN {
-	$VERSION = '1.10';
+	$VERSION = '1.11';
 	@ISA = qw(Socket::Class);
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
@@ -308,7 +308,7 @@ B<Example XS>
 
   #include <Socket/Class/SSL/mod_sc_ssl.h>
   
-  /* global pointer to the socket class interface */
+  /* global pointer to the socket class ssl interface */
   mod_sc_ssl_t *g_mod_sc_ssl;
   
   MODULE = MyModule		PACKAGE = MyModule
@@ -338,7 +338,7 @@ B<Example XS>
       args[5] = "/path/to/private_key.pem";
       args[6] = "certificate";
       args[7] = "/path/to/certificate.pem";
-      r = g_mod_sc_ssl->sc_create(args, 4, &socket);
+      r = g_mod_sc_ssl->sc_create(args, 8, &socket);
       if (r != SC_OK)
           croak(g_mod_sc_ssl->sc_get_error(NULL));
       g_mod_sc_ssl->sc_create_class(socket, NULL, &sv);

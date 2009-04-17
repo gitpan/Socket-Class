@@ -1,5 +1,11 @@
 Revision history for Perl extension Socket::Class.
 
+version 2.11
+    - updated SSL module for better compatibility with older OpenSSL
+      installations
+    - updated Const module for better compatibility with older Windows
+      installations
+
 version 2.10
     - Socket::Class::SSL is now a part of this module
     - fixed broken read in the SSL module
@@ -27,7 +33,7 @@ version 1.99_10 (toward 2.0 release)
     - changed perl type of the class from scalar to hashref (for sub classing)
       .. key field '_sc_' is used to identify the class internally
     - moved the constant module to XS
-    - constants can now be exported as const sub or as variables like before
+    - constants can now be exported as const sub, or as variables like before
     - incompatibility changes in socket state constants
       .. renamed state constants from SOS_* to SC_STATE_*
 

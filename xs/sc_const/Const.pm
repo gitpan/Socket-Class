@@ -7,7 +7,7 @@ package Socket::Class::Const;
 our( $VERSION, $ExportLevel );
 
 BEGIN {
-	$VERSION = '2.02';
+	$VERSION = '2.11';
 	require Socket::Class unless $Socket::Class::VERSION;
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );

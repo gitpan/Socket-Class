@@ -57,7 +57,8 @@ foreach my $p( @ARGV ) {
 );
 
 if( $_DEBUG ) {
-	print "enable debug messages\n";
+	$ENV{'SC_DEBUG'} = $_DEBUG;
+	print "Enable debug messages in Socket::Class level($_DEBUG)\n";
 	$_MAKEOPTS{'DEFINE'} .= ' -DSC_DEBUG=' . $_DEBUG;
 	if( $^O eq 'linux' ) {
 		$_MAKEOPTS{'DEFINE'} .= ' -Wall';

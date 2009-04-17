@@ -133,16 +133,18 @@ const export_item_t export_items[] = {
 	{ "IPPROTO_IP", ITEM_LONG, (const char *) IPPROTO_IP },
 	{ "IPPROTO_TCP", ITEM_LONG, (const char *) IPPROTO_TCP },
 	{ "IPPROTO_UDP", ITEM_LONG, (const char *) IPPROTO_UDP },
+	{ "MSG_DONTROUTE", ITEM_LONG, (const char *) MSG_DONTROUTE },
 	{ "MSG_OOB", ITEM_LONG, (const char *) MSG_OOB },
 	{ "MSG_PEEK", ITEM_LONG, (const char *) MSG_PEEK },
-	{ "MSG_DONTROUTE", ITEM_LONG, (const char *) MSG_DONTROUTE },
-	{ "MSG_CTRUNC", ITEM_LONG, (const char *) MSG_CTRUNC },
-	{ "MSG_TRUNC", ITEM_LONG, (const char *) MSG_TRUNC },
 #if defined _WIN32 || defined __CYGWIN__
+	{ "MSG_CTRUNC", ITEM_LONG, (const char *) 200 },
 	{ "MSG_DONTWAIT", ITEM_LONG, (const char *) 0 },
+	{ "MSG_TRUNC", ITEM_LONG, (const char *) 100 },
 	{ "MSG_WAITALL", ITEM_LONG, (const char *) 0x08 },
 #else
+	{ "MSG_CTRUNC", ITEM_LONG, (const char *) MSG_CTRUNC },
 	{ "MSG_DONTWAIT", ITEM_LONG, (const char *) MSG_DONTWAIT },
+	{ "MSG_TRUNC", ITEM_LONG, (const char *) MSG_TRUNC },
 	{ "MSG_WAITALL", ITEM_LONG, (const char *) MSG_WAITALL },
 #endif
 	{ "NI_DGRAM", ITEM_LONG, (const char *) 16 },

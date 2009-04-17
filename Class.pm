@@ -12,7 +12,7 @@ package Socket::Class;
 our( $VERSION );
 
 BEGIN {
-	$VERSION = '2.10';
+	$VERSION = '2.11';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;

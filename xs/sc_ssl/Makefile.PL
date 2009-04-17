@@ -5,6 +5,8 @@ use Config;
 
 my( $openssldir );
 
+$_DEBUG = $ENV{'SC_DEBUG'};
+
 my @argv = ();
 foreach my $p( @ARGV ) {
 	$_ = lc( $p );
@@ -46,7 +48,7 @@ my %makeopts = (
 );
 
 if( $_DEBUG ) {
-	print "enable debug messages\n";
+	print "Enable debug messages in Socket::Class::SSL level($_DEBUG)\n";
 	$makeopts{'DEFINE'} .= ' -DSC_DEBUG=' . $_DEBUG;
 	if( $^O eq 'linux' ) {
 		$makeopts{'DEFINE'} .= ' -Wall';

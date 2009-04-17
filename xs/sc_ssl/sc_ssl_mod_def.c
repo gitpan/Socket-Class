@@ -877,17 +877,25 @@ const char *my_ssl_error( int code ) {
 		return "The read operation did not complete";
 	case SSL_ERROR_WANT_WRITE:
 		return "The write operation did not complete";
+	case SSL_ERROR_SYSCALL:
+		return "Some I/O error occurred";
+#ifdef SSL_ERROR_ZERO_RETURN
+	case SSL_ERROR_ZERO_RETURN:
+		return "The TLS/SSL connection has been closed";
+#endif
+#ifdef SSL_ERROR_WANT_X509_LOOKUP
 	case SSL_ERROR_WANT_X509_LOOKUP:
 		return "The operation did not complete because an application"
 			" callback has asked to be called again";
-	case SSL_ERROR_SYSCALL:
-		return "Some I/O error occurred";
-	case SSL_ERROR_ZERO_RETURN:
-		return "The TLS/SSL connection has been closed";
+#endif
+#ifdef SSL_ERROR_WANT_CONNECT
 	case SSL_ERROR_WANT_CONNECT:
 		return "The connect operation did not complete";
+#endif
+#ifdef SSL_ERROR_WANT_ACCEPT
 	case SSL_ERROR_WANT_ACCEPT:
 		return "The accept operation did not complete";
+#endif
 	default:
 		return "Unknown TLS/SSL error";
 	}
