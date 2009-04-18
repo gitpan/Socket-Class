@@ -1,4 +1,5 @@
-package DES;
+package
+  DES;
 
 require Exporter;
 require DynaLoader;

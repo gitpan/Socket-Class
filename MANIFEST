@@ -551,7 +551,6 @@ xs/sc_ssl/openssl/source/crypto/des/cfb_enc.c
 xs/sc_ssl/openssl/source/crypto/des/des-lib.com
 xs/sc_ssl/openssl/source/crypto/des/des.c
 xs/sc_ssl/openssl/source/crypto/des/des.h
-xs/sc_ssl/openssl/source/crypto/des/des.pod
 xs/sc_ssl/openssl/source/crypto/des/des3s.cpp
 xs/sc_ssl/openssl/source/crypto/des/des_enc.c
 xs/sc_ssl/openssl/source/crypto/des/des_lib.c
@@ -1635,9 +1634,6 @@ xs/sc_ssl/openssl/source/util/mksdef.pl
 xs/sc_ssl/openssl/source/util/mkstack.pl
 xs/sc_ssl/openssl/source/util/opensslwrap.sh
 xs/sc_ssl/openssl/source/util/perlpath.pl
-xs/sc_ssl/openssl/source/util/pod2man.pl
-xs/sc_ssl/openssl/source/util/pod2mantest
-xs/sc_ssl/openssl/source/util/pod2mantest.pod
 xs/sc_ssl/openssl/source/util/point.sh
 xs/sc_ssl/openssl/source/util/selftest.pl
 xs/sc_ssl/openssl/source/util/shlib_wrap.sh
