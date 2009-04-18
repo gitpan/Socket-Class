@@ -12,7 +12,7 @@ package Socket::Class;
 our( $VERSION );
 
 BEGIN {
-	$VERSION = '2.11';
+	$VERSION = '2.12';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -1881,8 +1881,8 @@ The number of milliseconds to sleep as floating point number.
 
 =item B<is_error ()>
 
-Indicates a socket error. Returns a true value on socket state SOS_ERROR, or a
-false value on other states.
+Indicates a socket error. Returns TRUE on socket state SC_STATE_ERROR,
+or FALSE value on other state.
 
 
 =item B<errno ()>
@@ -1892,8 +1892,8 @@ Returns the last error code.
 
 =item B<error ( [code] )>
 
-Returns the error message of the error code provided by the I<$code> parameter,
-or from the last occurred error.
+Returns the error message for the error code provided by the I<$code>
+parameter, or for the last error occurred.
 
 =back
 

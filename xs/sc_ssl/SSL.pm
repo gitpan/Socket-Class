@@ -9,7 +9,7 @@ use Socket::Class;
 our( $VERSION, @ISA );
 
 BEGIN {
-	$VERSION = '1.11';
+	$VERSION = '1.12';
 	@ISA = qw(Socket::Class);
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );

@@ -1,5 +1,9 @@
 Revision history for Perl extension Socket::Class.
 
+version 2.12
+    - For Windows: OpenSSL will build from source if "--openssl-dir=DIR" isn't
+      specified. Hopefully it will build by Activestate now.
+
 version 2.11
     - updated SSL module for better compatibility with older OpenSSL
       installations

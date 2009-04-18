@@ -7,10 +7,10 @@ if( -d 'blib/arch/auto/Socket/Class/SSL' ) {
 	mkdir 'blib/arch/auto/Socket/Class/SSL/openssl';
 	&copy( 'openssl/openssl.conf', 'blib/arch/auto/Socket/Class/SSL/openssl/openssl.conf' );
 	if( $^O eq 'MSWin32' ) {
-		mkdir 'blib/arch/auto/Socket/Class/SSL/openssl/bin';
+		#mkdir 'blib/arch/auto/Socket/Class/SSL/openssl/bin';
 		&copy( 'openssl/LICENSE', 'blib/arch/auto/Socket/Class/SSL/openssl/LICENSE' );
 		&copy( 'openssl/mkcert.bat', 'blib/arch/auto/Socket/Class/SSL/openssl/mkcert.bat' );
-		&copy( 'openssl/bin/openssl.exe', 'blib/arch/auto/Socket/Class/SSL/openssl/bin/openssl.exe' );
+		&copy( 'openssl/source/out32/openssl.exe', 'blib/arch/auto/Socket/Class/SSL/openssl/openssl.exe' );
 	}
 	else {
 		&copy( 'openssl/mkcert.sh', 'blib/arch/auto/Socket/Class/SSL/openssl/mkcert.sh' );

@@ -2,6 +2,7 @@ package Socket::Class::SSL::Install;
 use 5.006;
 use ExtUtils::MakeMaker;
 use Config;
+use File::Copy;
 
 my( $openssldir );
 
@@ -73,13 +74,22 @@ elsif( $^O eq 'solaris' ) {
 if( $^O eq 'MSWin32' ) {
 	$makeopts{'DEFINE'} .= ' -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS';
 	if( ! $openssldir ) {
-		$makeopts{'INC'} .= ' -I./openssl/include';
-		if( $Config{'archname'} =~ /x64/ ) {
-			$makeopts{'LIBS'}[0] = '-Lopenssl/lib/win64';
+		# build openssl
+		$ENV{'PATH'} .= ";$Config{'bin'}";
+		chdir "openssl/source/";
+		if( $Config{'archname'} =~ /x64/ || $Config{'archname'} =~ /x86_64/ ) {
+			system "$Config{'perlpath'} Configure VC-WIN64A --prefix=../build";
+			system "ms\\do_win64a.bat";
 		}
 		else {
-			$makeopts{'LIBS'}[0] = '-Lopenssl/lib/win32';
+			system "$Config{'perlpath'} Configure VC-WIN32 --prefix=../build";
+			system "ms\\do_ms.bat";
 		}
+		system "nmake -f ms\\nt.mak";
+		chdir "../../";
+		return &dont_build() unless -e 'openssl/source/out32/ssleay32.lib';
+		$makeopts{'INC'} .= ' -Iopenssl/source/inc32';
+		$makeopts{'LIBS'}[0] = '-Lopenssl/source/out32';
 	}
 	$makeopts{'LIBS'}[0] .= ' -llibeay32 -lssleay32';
 	# cpan bug #37639
@@ -103,15 +113,7 @@ else {
 	}
 	unless( $found ) {
 		print "OpenSSL not found\n";
-		rename 't', '_t' if -d 't';
-		WriteMakefile(
-			'NAME' => 'Socket::Class::SSL',
-			'VERSION_FROM' => 'SSL.pm',
-			'XS' => {},
-			'C' => [],
-			'H' => [],
-		);
-		return;
+		return &dont_build();
 	}
 	if( $^O eq 'cygwin' ) {
 		$makeopts{'LIBS'}[0] .= ' -L/lib/w32api -lole32 -lversion -lws2_32 -lssl -lcrypto';
@@ -140,6 +142,18 @@ Options:
 
 EOTH
 	exit 256;
+}
+
+sub dont_build {
+	rename 't', '_t' if -d 't';
+	WriteMakefile(
+		'NAME' => 'Socket::Class::SSL',
+		'VERSION_FROM' => 'SSL.pm',
+		'XS' => {},
+		'C' => [],
+		'H' => [],
+	);
+	return 1;
 }
 
 sub build_cmodule {
