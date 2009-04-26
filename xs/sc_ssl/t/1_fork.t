@@ -14,7 +14,7 @@ $s = Socket::Class::SSL->new(
 	'local_addr' => '127.0.0.1',
 	'listen' => 10,
 	'reuseaddr' => 1,
-) or _fail_all();
+) or die Socket::Class->error();
 
 my $pid = fork();
 if( not defined $pid ) {
@@ -24,6 +24,7 @@ if( not defined $pid ) {
 elsif( $pid == 0 ) {
 	#print "IM THE CHILD\n";
 	$c = Socket::Class::SSL->new(
+		'remote_addr' => '127.0.0.1',
 		'remote_port' => $s->local_port,
 	) or exit();
 	$c->say( "hello server" ) or exit();

@@ -533,7 +533,11 @@ finish:
 	_debug( "vprintf size %u\n", size );
 #endif
 	Newx( tmp, size, char );
+#ifdef _WIN32
+	size = _vsnprintf( tmp, size, fmt, vl );
+#else
 	size = vsnprintf( tmp, size, fmt, vl );
+#endif
 #ifdef SC_DEBUG
 	_debug( "vprintf size %u\n", size );
 #endif

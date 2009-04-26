@@ -15,6 +15,7 @@
 
 #ifdef _WIN32
 
+#include <objbase.h>
 #include <initguid.h>
 #include <tchar.h>
 #include <io.h>
@@ -55,13 +56,6 @@
 #ifdef SC_DEBUG
 EXTERN int my_debug( const char *fmt, ... );
 #define _debug my_debug
-#endif
-
-#ifdef _WIN32
-#undef vsnprintf
-#define vsnprintf _vsnprintf
-#undef snprintf
-#define snprintf _snprintf
 #endif
 
 #undef BYTE
@@ -220,6 +214,12 @@ struct sockaddr_un {
 	sa_family_t					sun_family;				/* AF_UNIX */
 	char						sun_path[108];			/* pathname */
 };
+
+#ifdef SC_OLDNET
+struct in6_addr {
+	uint8_t						s6_addr[16];
+};
+#endif
 
 #else /* POSIX */
 
