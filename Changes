@@ -1,5 +1,8 @@
 Revision history for Perl extension Socket::Class.
 
+version 2.16
+    - updated source again to get build on Activestate
+
 version 2.15
     - upload of 2.14 failed
 
