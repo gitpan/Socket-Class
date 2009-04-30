@@ -273,13 +273,8 @@ int mod_sc_create_class( sc_t *socket, const char *pkg, SV **psv ) {
 	}
 	hv = gv_stashpv( pkg, FALSE );
 	if( hv == NULL ) {
-#ifdef _WIN32
-		_snprintf( socket->last_error, sizeof( socket->last_error ),
+		my_snprintf_( socket->last_error, sizeof( socket->last_error ),
 			"Invalid package '%s'", pkg );
-#else
-		snprintf( socket->last_error, sizeof( socket->last_error ),
-			"Invalid package '%s'", pkg );
-#endif
 		socket->last_errno = -9999;
 		return SC_ERROR;
 	}
@@ -1182,11 +1177,7 @@ bt_noport:
 		break;
 	case AF_INET:
 		r = ntohl( ((struct sockaddr_in *) addr->a )->sin_addr.s_addr );
-#ifdef _WIN32
-		r = _snprintf( host, *host_len, "%u.%u.%u.%u", IP4( r ) );
-#else
-		r = snprintf( host, *host_len, "%u.%u.%u.%u", IP4( r ) );
-#endif
+		r = my_snprintf_( host, *host_len, "%u.%u.%u.%u", IP4( r ) );
 		*host_len = r;
 		if( *serv_len >= 6 ) {
 			r = ntohs( ((struct sockaddr_in *) addr->a )->sin_port );
@@ -1200,17 +1191,10 @@ bt_noport:
 		break;
 	case AF_INET6:
 		s1 = (char *) &((struct sockaddr_in6 *) addr->a )->sin6_addr;
-#ifdef _WIN32
-		r = _snprintf( host, *host_len,
+		r = my_snprintf_( host, *host_len,
 			"%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
 			IP6( (uint16_t *) s1 )
 		);
-#else
-		r = snprintf( host, *host_len,
-			"%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
-			IP6( (uint16_t *) s1 )
-		);
-#endif
 		*host_len = r;
 		if( *serv_len >= 6 ) {
 			r = ntohs( ((struct sockaddr_in6 *) addr->a )->sin6_port );
@@ -1323,26 +1307,15 @@ int mod_sc_gethostbyname(
 	switch( ail->ai_family ) {
 	case AF_INET:
 		r = ntohl( ((struct sockaddr_in *) ail->ai_addr )->sin_addr.s_addr );
-#ifndef _WIN32
-		r = _snprintf( addr, *addr_len, "%u.%u.%u.%u", IP4( r ) );
-#else
-		r = snprintf( addr, *addr_len, "%u.%u.%u.%u", IP4( r ) );
-#endif
+		r = my_snprintf_( addr, *addr_len, "%u.%u.%u.%u", IP4( r ) );
 		*addr_len = r;
 		break;
 	case AF_INET6:
 		p1 = &((struct sockaddr_in6 *) ail->ai_addr )->sin6_addr;
-#ifndef _WIN32
-		r = _snprintf( addr, *addr_len,
+		r = my_snprintf_( addr, *addr_len,
 			"%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
 			IP6( (uint16_t *) p1 )
 		);
-#else
-		r = snprintf( addr, *addr_len,
-			"%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
-			IP6( (uint16_t *) p1 )
-		);
-#endif
 		*addr_len = r;
 		break;
 	default:
@@ -1364,25 +1337,14 @@ int mod_sc_gethostbyname(
 	switch( he->h_addrtype ) {
 	case AF_INET:
 		r = ntohl( (*(struct in_addr*) he->h_addr).s_addr );
-#ifdef _WIN32
-		r = _snprintf( addr, *addr_len, "%u.%u.%u.%u", IP4( r ) );
-#else
-		r = snprintf( addr, *addr_len, "%u.%u.%u.%u", IP4( r ) );
-#endif
+		r = my_snprintf_( addr, *addr_len, "%u.%u.%u.%u", IP4( r ) );
 		*addr_len = r;
 		break;
 	case AF_INET6:
-#ifdef _WIN32
-		r = _snprintf( addr, *addr_len,
+		r = my_snprintf_( addr, *addr_len,
 			"%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
 			IP6( (uint16_t *) he->h_addr )
 		);
-#else
-		r = snprintf( addr, *addr_len,
-			"%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
-			IP6( (uint16_t *) he->h_addr )
-		);
-#endif
 		*addr_len = r;
 		break;
 	default:
@@ -2141,19 +2103,11 @@ void mod_sc_set_error( sc_t *sock, int code, const char *fmt, ... ) {
 	va_start( vl, fmt );
 	if( sock != NULL ) {
 		sock->last_errno = code;
-#ifdef _WIN32
-		_vsnprintf( sock->last_error, sizeof(sock->last_error), fmt, vl );
-#else
-		vsnprintf( sock->last_error, sizeof(sock->last_error), fmt, vl );
-#endif
+		my_snprintf_( sock->last_error, sizeof(sock->last_error), fmt, vl );
 	}
 	else {
 		global.last_errno = code;
-#ifdef _WIN32
-		_vsnprintf( global.last_error, sizeof(global.last_error), fmt, vl );
-#else
-		vsnprintf( global.last_error, sizeof(global.last_error), fmt, vl );
-#endif
+		my_snprintf_( global.last_error, sizeof(global.last_error), fmt, vl );
 	}
 	va_end( vl );
 }

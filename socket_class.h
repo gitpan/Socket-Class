@@ -414,6 +414,7 @@ EXTERN char *my_itoa( char *str, long value, int radix );
 EXTERN char *my_strncpy( char *dst, const char *src, size_t len );
 EXTERN char *my_strcpy( char *dst, const char *src );
 EXTERN int my_stricmp( const char *cs, const char *ct );
+EXTERN int my_snprintf_( char *str, size_t size, const char *format, ... );
 
 #ifdef _WIN32
 

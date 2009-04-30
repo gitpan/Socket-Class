@@ -447,6 +447,7 @@ error:
 	return SOCKET_ERROR;
 }
 
+
 INLINE int my_ba2str( const bdaddr_t *ba, char *str ) {
 	register const unsigned char *b = (const unsigned char *) ba;
 	return sprintf( str,
@@ -529,6 +530,20 @@ INLINE int my_stricmp( const char *cs, const char *ct ) {
 	}
 	return res;
 }
+
+INLINE int my_snprintf_( char *str, size_t size, const char *format, ... ) {
+	va_list va;
+	int r;
+	va_start( va, format );
+#ifdef _WIN32
+	r = _vsnprintf( str, size, format, va );
+#else
+	r = vsnprintf( str, size, format, va );
+#endif
+	va_end( va );
+	return r;
+}
+
 
 #ifdef SC_DEBUG
 

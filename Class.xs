@@ -442,17 +442,10 @@ PPCODE:
 	if( to != NULL && SvPOK( to ) ) {
 		peer = (my_sockaddr_t *) SvPVbyte( to, len );
 		if( len < sizeof( int ) || len != SC_ADDR_SIZE(*peer) ) {
-#ifdef _WIN32
-			_snprintf(
+			my_snprintf_(
 				sc->last_error, sizeof( sc->last_error ),
 				"Invalid address"
 			);
-#else
-			snprintf(
-				sc->last_error, sizeof( sc->last_error ),
-				"Invalid address"
-			);
-#endif
 			XSRETURN_EMPTY;
 		}
 	}
@@ -682,17 +675,10 @@ PPCODE:
 		XSRETURN_EMPTY;
 	saddr = (my_sockaddr_t *) SvPVbyte( paddr, len );
 	if( len < sizeof( int ) || len != SC_ADDR_SIZE(*saddr) ) {
-#ifdef _WIN32
-		_snprintf(
+		my_snprintf_(
 			sc->last_error, sizeof( sc->last_error ),
 			"Invalid address"
 		);
-#else
-		snprintf(
-			sc->last_error, sizeof( sc->last_error ),
-			"Invalid address"
-		);
-#endif
 		XSRETURN_EMPTY;
 	}
 	r = mod_sc_unpack_addr( sc, saddr, addr, &addr_len, port, &port_len );
