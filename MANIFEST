@@ -42,6 +42,8 @@ xs/sc_ssl/sc_ssl_mod_def.c
 xs/sc_ssl/sc_ssl_mod_def.h
 xs/sc_ssl/SSL.pm
 xs/sc_ssl/SSL.xs
+xs/sc_ssl/lib32/bufferoverflowu.lib
+xs/sc_ssl/lib64/bufferoverflowu.lib
 xs/sc_ssl/cert/server.crt
 xs/sc_ssl/cert/server.key
 xs/sc_ssl/openssl/LICENSE
@@ -62,7 +64,6 @@ xs/sc_ssl/openssl/source/Makefile.org
 xs/sc_ssl/openssl/source/Makefile.shared
 xs/sc_ssl/openssl/source/NEWS
 xs/sc_ssl/openssl/source/README
-xs/sc_ssl/openssl/source/bufferoverflowU.lib
 xs/sc_ssl/openssl/source/config
 xs/sc_ssl/openssl/source/e_os.h
 xs/sc_ssl/openssl/source/e_os2.h

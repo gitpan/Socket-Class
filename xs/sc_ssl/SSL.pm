@@ -9,7 +9,7 @@ use Socket::Class;
 our( $VERSION, @ISA );
 
 BEGIN {
-	$VERSION = '1.17';
+	$VERSION = '1.20';
 	@ISA = qw(Socket::Class);
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
@@ -33,7 +33,9 @@ Socket::Class::SSL - SSL support for Socket::Class
 
   use Socket::Class::SSL;
   
-  $s = Socket::Class::SSL->new( ... );
+  $ssl = Socket::Class::SSL->new( ... );
+  
+  $ssl = Socket::Class::SSL->starttls( $sock );
 
 =head1 DESCRIPTION
 
@@ -113,6 +115,56 @@ Additional arguments for the constructor.
 =for formatter perl
 
 Detailed information about the arguments are documented in the functions below.
+
+=item B<starttls ( $sock )>
+
+Starts a TLS session on a connected socket.
+
+B<Parameters>
+
+=over
+
+=item I<$sock>
+
+A Socket::Class object.
+
+=back
+
+B<Return Values>
+
+Returns a Socket::Class::SSL object on sucess or UNDEF on failure.
+
+B<Example>
+
+  $sock = Socket::Class->new(
+      'remote_host' => 'localhost',
+      'remote_port' => 'smtp',
+      'blocking' => 0,
+  );
+  $sock->is_readable or die 'Socket is not readable';
+  print $sock->readline, "\n";
+  $sock->writeline( 'EHLO localhost' );
+  $sock->is_readable or die 'Socket is not readable';
+  while( $line = $sock->readline ) {
+      print $line, "\n";
+      $starttls = 1 if index( $line, 'STARTTLS' ) > 0;
+  }
+  if( $starttls ) {
+      $sock->writeline( 'STARTTLS' );
+      $sock->is_readable or die 'Socket is not readable';
+      print $sock->readline, "\n";
+      $sock->set_blocking( 1 );
+      # start tls
+      $ssl = Socket::Class::SSL->starttls( $sock )
+          or die 'TLS initialization failed: ' . $sock->error;
+      # use the ssl socket
+      $sock = $ssl;
+      $sock->writeline( 'HELO localhost' );
+      $sock->set_blocking( 0 );
+      $sock->is_readable or die 'Socket is not readable';
+      print $sock->readline, "\n";
+  }
+  ...
 
 =item B<set_certificate ( $certificate )>
 
@@ -306,7 +358,7 @@ B<Example XS>
 
 =for formatter cpp
 
-  #include <Socket/Class/SSL/mod_sc_ssl.h>
+  #include <mod_sc_ssl.h>
   
   /* global pointer to the socket class ssl interface */
   mod_sc_ssl_t *g_mod_sc_ssl;
@@ -347,7 +399,9 @@ B<Example XS>
 
 =for formatter perl
 
-See I<[sitearch]/auto/Socket/Class/SSL/mod_sc_ssl.h> for the definition.
+See I<mod_sc_ssl.h> for the definition.
+
+Use I<Socket::Class::SSL::include_path()> to get the path to I<mod_ssl_sc.h>.
 
 =head1 SEE ALSO
 

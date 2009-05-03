@@ -12,7 +12,7 @@ package Socket::Class;
 our( $VERSION );
 
 BEGIN {
-	$VERSION = '2.17';
+	$VERSION = '2.20';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -2003,7 +2003,7 @@ B<Example XS>
 
 =for formatter cpp
 
-  #include <Socket/Class/mod_sc.h>
+  #include <mod_sc.h>
   
   /* global pointer to the socket class interface */
   mod_sc_t *g_mod_sc;
@@ -2043,7 +2043,7 @@ B<Example XS>
 See I<mod_sc.h> for the definition and the source code of I<Class.xs>
 for an implementation.
 
-Use I<Socket::Class::include_path()> to get the include path for I<mod_sc.h>.
+Use I<Socket::Class::include_path()> to get the path to I<mod_sc.h>.
 
 =head1 AUTHORS
 

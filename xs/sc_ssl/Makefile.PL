@@ -77,11 +77,14 @@ if( $^O eq 'MSWin32' ) {
 		# build openssl
 		$ENV{'PATH'} .= ";$Config{'bin'}";
 		chdir "openssl/source/";
+		unlink 'bufferoverflowu.lib';
 		if( $Config{'archname'} =~ /x64/ || $Config{'archname'} =~ /x86_64/ ) {
+			copy( '../../lib64/bufferoverflowu.lib', 'bufferoverflowu.lib' );
 			system "$Config{'perlpath'} Configure VC-WIN64A --prefix=../build";
 			system "ms\\do_win64a.bat";
 		}
 		else {
+			copy( '../../lib32/bufferoverflowu.lib', 'bufferoverflowu.lib' );
 			system "$Config{'perlpath'} Configure VC-WIN32 --prefix=../build";
 			system "ms\\do_ms.bat";
 		}
@@ -204,6 +207,7 @@ sub cflags {
 	    $inherited =~ s/-O1/-O2/sg;
     	# set static linking to crt
 	    $inherited =~ s/-MD/-MT/sg;
+	    #$inherited =~ s/\/GS//sg;
 	}
     $inherited;
 }

@@ -215,7 +215,7 @@ struct sockaddr_un {
 	char						sun_path[108];			/* pathname */
 };
 
-#ifdef SC_OLDNET
+#if defined SC_OLDNET && _MSC_VER <= 1200
 struct in6_addr {
 	uint8_t						s6_addr[16];
 };

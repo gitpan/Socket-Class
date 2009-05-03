@@ -52,6 +52,7 @@ BOOT:
 	mod_sc_ssl.sc_ssl_get_cipher_name = mod_sc_ssl_get_cipher_name;
 	mod_sc_ssl.sc_ssl_get_cipher_version = mod_sc_ssl_get_cipher_version;
 	mod_sc_ssl.sc_ssl_get_version = mod_sc_ssl_get_version;
+	mod_sc_ssl.sc_ssl_starttls = mod_sc_ssl_starttls;
 	/* store the c module interface in the modglobal hash */
 	(void) hv_store( PL_modglobal,
 		"Socket::Class::SSL", 18, newSViv( PTR2IV( &mod_sc_ssl ) ), 0 );
@@ -496,7 +497,7 @@ PPCODE:
 	for( r = 1; r < items; r ++ ) {
 		if( ! SvOK( ST(r) ) )
 			continue;
-		s1 = SvPV( ST(r), l1 );
+		s1 = SvPVx( ST(r), l1 );
 		if( pos + l1 > len ) {
 			len = pos + l1 + 64;
 			Renew( tmp, len, char );
@@ -747,4 +748,26 @@ PPCODE:
 	ST(0) = sv_2mortal( newSVpvn( s, strlen( s ) ) );
 	XSRETURN_EMPTY;
 
+
+#/*****************************************************************************
+# * starttls( pkg, this )
+# *****************************************************************************/
+
+void
+starttls( pkg, this )
+	SV *pkg;
+	SV *this;
+PREINIT:
+	sc_t *socket;
+	SV *sv;
+PPCODE:
+	if( (socket = mod_sc->sc_get_socket( this )) == NULL )
+		XSRETURN_EMPTY;
+	if( mod_sc_ssl_starttls( socket ) != SC_OK )
+		XSRETURN_EMPTY;
+	/* create a new class */
+	if( mod_sc->sc_create_class( socket, SvPV_nolen( pkg ), &sv ) != SC_OK )
+		XSRETURN_EMPTY;
+	ST(0) = sv_2mortal( sv );
+	XSRETURN(1);
 

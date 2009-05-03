@@ -1,5 +1,9 @@
 Revision history for Perl extension Socket::Class.
 
+version 2.20
+    - added function starttls() to SSL module
+    - updated source to get build on Activestate
+
 version 2.17
     - fixed missplaced _WIN32 switch for snprintf
 

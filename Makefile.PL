@@ -183,6 +183,7 @@ sub const_loadlibs {
     if( $^O eq 'MSWin32' ) {
     	# set static linking to crt
 	    $inherited =~ s/msvcrt\.lib/libcmt\.lib/sgi;
+	    #$inherited =~ s/\/GS//sg;
 	}
     $inherited;
 }

@@ -31,6 +31,8 @@ struct st_mod_sc_ssl {
 	const char *(*sc_ssl_get_cipher_version) ( sc_t *socket );
 	/* since version 1.1 */
 	const char *(*sc_ssl_get_version) ( sc_t *socket );
+	/* since version 1.2 */
+	int (*sc_ssl_starttls) ( sc_t *socket );
 };
 
 #endif /* _MOD_SC_SSL_H_ */

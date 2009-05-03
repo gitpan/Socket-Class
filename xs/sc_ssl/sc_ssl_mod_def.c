@@ -253,7 +253,7 @@ int mod_sc_ssl_recv( sc_t *socket, char *buf, int len, int flags, int *p_len ) {
 		if( (flags & MSG_PEEK) == 0 ) {
 			ud->rcvbuf_pos -= len2;
 			if( ud->rcvbuf_pos > 0 )
-				memmove( ud->rcvbuf, ud->rcvbuf + len2, ud->rcvbuf_pos );
+				Move( ud->rcvbuf + len2, ud->rcvbuf, ud->rcvbuf_pos, char );
 		}
 		len -= len2;
 		if( len == 0 || ! SSL_pending( ud->ssl ) ) {
@@ -848,6 +848,23 @@ const char *mod_sc_ssl_get_version( sc_t *socket ) {
 	if( ud->ssl == NULL )
 		return NULL;
 	return SSL_get_version( ud->ssl );
+}
+
+int mod_sc_ssl_starttls( sc_t *socket ) {
+	userdata_t *ud;
+	int r, err;
+	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	if( ud == NULL ) {
+		Newxz( ud, 1, userdata_t );
+		mod_sc->sc_set_userdata( socket, ud, free_userdata );
+	}
+	r = mod_sc_ssl_create_client_context( socket );
+	if( r != SC_OK )
+		return r;
+	ud->ssl = SSL_new( ud->ctx );
+	SSL_set_fd( ud->ssl, (int) mod_sc->sc_get_handle( socket ) );
+	SSL_set_connect_state( ud->ssl );
+	return SC_OK;
 }
 
 void free_userdata( void *p ) {

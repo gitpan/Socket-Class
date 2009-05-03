@@ -900,13 +900,13 @@ int mod_sc_readline( sc_t *sock, char **p_buf, int *p_len ) {
 			goto error;
 		}
 		for( i = 0; i < (size_t) r; i ++, p ++ ) {
-			if( *p != '\n' && *p != '\r' && *p != '\0' )
+			ch = *p;
+			if( ch != '\n' && ch != '\r' && ch != '\0' )
 				continue;
 			/* found newline */
 #ifdef SC_DEBUG
 			_debug( "found newline at %d + %d of %d\n", pos, i, r );
 #endif
-			ch = *p;
 			*p = '\0';
 			*p_buf = sock->buffer;
 			*p_len = (int) (pos + i);
