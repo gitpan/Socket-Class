@@ -3,6 +3,7 @@ use 5.006;
 use ExtUtils::MakeMaker;
 use Config;
 use File::Copy;
+use File::Path qw/rmtree/;
 
 my( $openssldir );
 
@@ -59,22 +60,17 @@ if( $_DEBUG ) {
 @search = qw{/usr/local /usr /opt};
 
 if( $openssldir ) {
-	#$makeopts{'INC'} .= " -I${openssldir}/include";
-	#$makeopts{'LIBS'}[0] = "-L${openssldir}/lib";
 	@search = ( $openssldir );
 }
 elsif( $^O eq 'solaris' ) {
 	if( -d '/opt/csw/include/openssl' ) {
 		push @search, '/opt/csw';
-		#$makeopts{'INC'} .= " -I/opt/csw/include";
-		#$makeopts{'LIBS'}[0] = "-L/opt/csw/lib";
 	}
 }
 
 if( $^O eq 'MSWin32' ) {
 	$makeopts{'DEFINE'} .= ' -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS';
 	if( ! $openssldir ) {
-		# build openssl
 		$ENV{'PATH'} .= ";$Config{'bin'}";
 		chdir "openssl/source/";
 		unlink 'bufferoverflowu.lib';
@@ -88,13 +84,19 @@ if( $^O eq 'MSWin32' ) {
 			system "$Config{'perlpath'} Configure VC-WIN32 --prefix=../build";
 			system "ms\\do_ms.bat";
 		}
-		system "nmake -f ms\\nt.mak";
 		chdir "../../";
-		return &dont_build() unless -e 'openssl/source/out32/ssleay32.lib';
 		$makeopts{'INC'} .= ' -Iopenssl/source/inc32';
 		$makeopts{'LIBS'}[0] = '-Lopenssl/source/out32';
+		$build_openssl = 1;
+		$extralibs = '-libpath:openssl\source\out32 libeay32.lib ssleay32.lib';
+		rmtree( 'openssl/source/inc32' );
+		rmtree( 'openssl/source/tmp32' );
+		rmtree( 'openssl/source/out32' );
 	}
-	$makeopts{'LIBS'}[0] .= ' -llibeay32 -lssleay32';
+	else {
+		$makeopts{'INC'} .= ' -I$openssldir/include';
+		$makeopts{'LIBS'}[0] = '-L$openssldir/lib -llibeay32 -lssleay32';
+	}
 	# cpan bug #37639
 	$ExtUtils::MM_Win32::Config{'ccversion'} = 13;
 }
@@ -215,8 +217,29 @@ sub cflags {
 sub const_loadlibs {
     my $inherited = shift->SUPER::const_loadlibs( @_ );
     if( $^O eq 'MSWin32' ) {
-    	# set static linking to crt
-	    $inherited =~ s/msvcrt\.lib/libcmt\.lib/sgi;
+		if( my $x = $Socket::Class::SSL::Install::extralibs ) {
+			$inherited =~ s/LDLOADLIBS = /LDLOADLIBS = $x /;
+			#warn $inherited;
+		}
+		# set static linking to crt
+		$inherited =~ s/msvcrt\.lib/libcmt\.lib/sgi;
 	}
-    $inherited;
+	$inherited;
+}
+
+sub postamble {
+	return '' unless $^O eq 'MSWin32';
+	return <<'EOT';
+openssl ::
+		cd openssl\source\ && $(MAKE) -f ms\nt.mak
+EOT
+}
+
+sub top_targets {
+	my $inherited = shift->SUPER::top_targets( @_ );
+	if( $Socket::Class::SSL::Install::build_openssl ) {
+		$inherited =~ s/all ::/all :: openssl/;
+		#warn $inherited;
+	}
+	$inherited;
 }

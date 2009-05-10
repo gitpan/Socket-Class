@@ -6,11 +6,11 @@ rem # Edit openssl.conf before running this
 set KEYFILE=server.key
 set CERTFILE=server.crt
 
-bin\\openssl.exe req -new -x509 -nodes -config openssl.conf -out %CERTFILE% -keyout %KEYFILE% -days 36500
+openssl.exe req -new -x509 -nodes -config openssl.conf -out %CERTFILE% -keyout %KEYFILE% -days 36500
 if errorlevel 1 goto error
 echo 
 
-bin\\openssl.exe x509 -subject -fingerprint -noout -in %CERTFILE%
+openssl.exe x509 -subject -fingerprint -noout -in %CERTFILE%
 if errorlevel 1 goto error
 
 goto exit;
