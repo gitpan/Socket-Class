@@ -6,7 +6,7 @@ int mod_sc_ssl_create( char **args, int argc, sc_t **r_socket ) {
 	char *key, *val, **args2, *ra = NULL, *rp = NULL, *la = NULL, *lp = NULL;
 	char *domain = NULL, *type = NULL, *proto = NULL;
 	char *pk = NULL, *crt = NULL, *cca = NULL;
-	char *caf = NULL, *cap = NULL;
+	char *caf = NULL, *cap = NULL, *ciphlist = NULL, *sslmethod = NULL;
 	userdata_t *ud;
 	if( argc % 2 ) {
 		mod_sc->sc_set_errno( NULL, EINVAL );
@@ -54,6 +54,12 @@ int mod_sc_ssl_create( char **args, int argc, sc_t **r_socket ) {
 		else if( my_stricmp( key, "ca_path" ) == 0 ) {
 			cap = val;
 		}
+		else if( my_stricmp( key, "cipher_list" ) == 0 ) {
+			ciphlist = val;
+		}
+		else if( my_stricmp( key, "ssl_method" ) == 0 ) {
+			sslmethod = val;
+		}
 		else if(
 			my_stricmp( key, "domain" ) == 0 ||
 			my_stricmp( key, "family" ) == 0
@@ -92,6 +98,14 @@ int mod_sc_ssl_create( char **args, int argc, sc_t **r_socket ) {
 		return r;
 	Newxz( ud, 1, userdata_t );
 	mod_sc->sc_set_userdata( socket, ud, free_userdata );
+	if( sslmethod != NULL ) {
+		r = mod_sc_ssl_set_ssl_method( socket, sslmethod );
+		if( r != SC_OK )
+			goto error;
+	}
+	else {
+		ud->method_id = sslv23;
+	}
 	if( pk != NULL ) {
 		r = mod_sc_ssl_set_private_key( socket, pk );
 		if( r != SC_OK )
@@ -109,6 +123,11 @@ int mod_sc_ssl_create( char **args, int argc, sc_t **r_socket ) {
 	}
 	if( caf != NULL || cap != NULL ) {
 		r = mod_sc_ssl_set_verify_locations( socket, caf, cap );
+		if( r != SC_OK )
+			goto error;
+	}
+	if( ciphlist != NULL ) {
+		r = mod_sc_ssl_set_cipher_list( socket, ciphlist );
 		if( r != SC_OK )
 			goto error;
 	}
@@ -692,11 +711,27 @@ int mod_sc_ssl_create_client_context( sc_t *socket ) {
 		SSL_free( ud->ssl );
 		ud->ssl = NULL;
 	}
-	if( ud->method != SSLv23_client_method() ) {
+	SSL_METHOD *method;
+	switch( ud->method_id ) {
+	case sslv2:
+		method = SSLv2_client_method();
+		break;
+	default:
+	case sslv23:
+		method = SSLv23_client_method();
+		break;
+	case sslv3:
+		method = SSLv3_client_method();
+		break;
+	case tlsv1:
+		method = TLSv1_client_method();
+		break;
+	}
+	if( ud->method != method ) {
 		if( ud->ctx != NULL )
 			SSL_CTX_free( ud->ctx );
 		/* create ssl instance */
-		ud->method = SSLv23_client_method();
+		ud->method = method;
 		/* create context */
 		ud->ctx = SSL_CTX_new( ud->method );
 		/* load verify locations */
@@ -726,6 +761,14 @@ int mod_sc_ssl_create_client_context( sc_t *socket ) {
 			if( ! r )
 				goto error;
 		}
+		/* set cipher list */
+		if( ud->cipher_list != NULL ) {
+#ifdef SC_DEBUG
+			_debug( "set cipher list '%s'\n", ud->cipher_list );
+#endif
+			if( !SSL_CTX_set_cipher_list( ud->ctx, ud->cipher_list ) )
+				goto error;
+		}
 		/* set auto retry */
 		SSL_CTX_set_mode( ud->ctx, SSL_MODE_AUTO_RETRY );
 	}
@@ -745,11 +788,27 @@ int mod_sc_ssl_create_server_context( sc_t *socket ) {
 		SSL_free( ud->ssl );
 		ud->ssl = NULL;
 	}
-	if( ud->method != SSLv23_server_method() ) {
+	SSL_METHOD *method;
+	switch( ud->method_id ) {
+	case sslv2:
+		method = SSLv2_server_method();
+		break;
+	default:
+	case sslv23:
+		method = SSLv23_server_method();
+		break;
+	case sslv3:
+		method = SSLv3_server_method();
+		break;
+	case tlsv1:
+		method = TLSv1_server_method();
+		break;
+	}
+	if( ud->method != method ) {
 		if( ud->ctx != NULL )
 			SSL_CTX_free( ud->ctx );
 		/* create ssl instance */
-		ud->method = SSLv23_server_method();
+		ud->method = method;
 		/* create context */
 		ud->ctx = SSL_CTX_new( ud->method );
 		/* load verify locations */
@@ -785,6 +844,14 @@ int mod_sc_ssl_create_server_context( sc_t *socket ) {
 			r = SSL_CTX_use_PrivateKey_file(
 				ud->ctx, ud->private_key, SSL_FILETYPE_PEM );
 			if( ! r )
+				goto error;
+		}
+		/* set cipher list */
+		if( ud->cipher_list != NULL ) {
+#ifdef SC_DEBUG
+			_debug( "set cipher list '%s'\n", ud->cipher_list );
+#endif
+			if( !SSL_CTX_set_cipher_list( ud->ctx, ud->cipher_list ) )
 				goto error;
 		}
 		/* set auto retry */
@@ -852,7 +919,7 @@ const char *mod_sc_ssl_get_version( sc_t *socket ) {
 
 int mod_sc_ssl_starttls( sc_t *socket ) {
 	userdata_t *ud;
-	int r, err;
+	int r;
 	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
 	if( ud == NULL ) {
 		Newxz( ud, 1, userdata_t );
@@ -864,6 +931,54 @@ int mod_sc_ssl_starttls( sc_t *socket ) {
 	ud->ssl = SSL_new( ud->ctx );
 	SSL_set_fd( ud->ssl, (int) mod_sc->sc_get_handle( socket ) );
 	SSL_set_connect_state( ud->ssl );
+	return SC_OK;
+}
+
+int mod_sc_ssl_set_ssl_method( sc_t *socket, const char *s ) {
+	userdata_t *ud;
+	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+#ifdef SC_DEBUG
+	_debug( "set ssl method '%s'\n", s );
+#endif
+	if( *s == '\0' ) {
+		ud->method_id = sslv23;
+	}
+	else if( my_stricmp( s, "TLSV1" ) == 0 ) {
+		ud->method_id = tlsv1;
+	}
+	else if( my_stricmp( s, "SSLV3" ) == 0 ) {
+		ud->method_id = sslv3;
+	}
+	else if( my_stricmp( s, "SSLV23" ) == 0 ) {
+		ud->method_id = sslv23;
+	}
+	else if( my_stricmp( s, "SSLV2" ) == 0 ) {
+		ud->method_id = sslv2;
+	}
+	else {
+		mod_sc->sc_set_error( socket, -1, "invalid ssl method: %s", s );
+		return SC_ERROR;
+	}
+	return SC_OK;
+}
+
+int mod_sc_ssl_set_cipher_list( sc_t *socket, const char *s ) {
+	int l;
+	userdata_t *ud;
+	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	l = (int) strlen( s );
+	Renew( ud->cipher_list, l + 1, char );
+	Copy( s, ud->cipher_list, l + 1, char );
+	if( ud->ctx != NULL ) {
+#ifdef SC_DEBUG
+		_debug( "set cipher list '%s'\n", ud->cipher_list );
+#endif
+		if( !SSL_CTX_set_cipher_list( ud->ctx, ud->cipher_list ) ) {
+			int r = ERR_get_error();
+			mod_sc->sc_set_error( socket, r, ERR_reason_error_string( r ) );
+			return SC_ERROR;
+		}
+	}
 	return SC_OK;
 }
 

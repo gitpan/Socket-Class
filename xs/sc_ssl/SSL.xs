@@ -53,6 +53,8 @@ BOOT:
 	mod_sc_ssl.sc_ssl_get_cipher_version = mod_sc_ssl_get_cipher_version;
 	mod_sc_ssl.sc_ssl_get_version = mod_sc_ssl_get_version;
 	mod_sc_ssl.sc_ssl_starttls = mod_sc_ssl_starttls;
+	mod_sc_ssl.sc_ssl_set_ssl_method = mod_sc_ssl_set_ssl_method;
+	mod_sc_ssl.sc_ssl_set_cipher_list = mod_sc_ssl_set_cipher_list;
 	/* store the c module interface in the modglobal hash */
 	(void) hv_store( PL_modglobal,
 		"Socket::Class::SSL", 18, newSViv( PTR2IV( &mod_sc_ssl ) ), 0 );
@@ -770,4 +772,41 @@ PPCODE:
 		XSRETURN_EMPTY;
 	ST(0) = sv_2mortal( sv );
 	XSRETURN(1);
+
+
+#/*****************************************************************************
+# * set_ssl_method( this, name )
+# *****************************************************************************/
+
+void
+set_ssl_method( this, name )
+	SV *this;
+	char *name;
+PREINIT:
+	sc_t *socket;
+PPCODE:
+	if( (socket = mod_sc->sc_get_socket( this )) == NULL )
+		XSRETURN_EMPTY;
+	if( mod_sc_ssl_set_ssl_method( socket, name ) != SC_OK )
+		XSRETURN_EMPTY;
+	XSRETURN_YES;
+
+
+#/*****************************************************************************
+# * set_cipher_list( this, str )
+# *****************************************************************************/
+
+void
+set_cipher_list( this, str )
+	SV *this;
+	char *str;
+PREINIT:
+	sc_t *socket;
+PPCODE:
+	if( (socket = mod_sc->sc_get_socket( this )) == NULL )
+		XSRETURN_EMPTY;
+	if( mod_sc_ssl_set_cipher_list( socket, str ) != SC_OK )
+		XSRETURN_EMPTY;
+	XSRETURN_YES;
+
 

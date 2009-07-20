@@ -109,10 +109,11 @@ PPCODE:
 	GLOBAL_LOCK();
 	for( i = 0; i < SC_CASCADE; i ++ ) {
 		for( sc = global.first_socket[i]; sc != NULL; sc = sc->next ) {
+			if( sc->do_clone )
+				sc->refcnt ++;
 #ifdef SC_DEBUG
 			_debug( "CLONE called for sc %lu refcnt: %d\n", sc->id, sc->refcnt );
 #endif
-			sc->refcnt ++;
 		}
 	}
 	GLOBAL_UNLOCK();
@@ -133,7 +134,15 @@ PPCODE:
 	if( (sc = mod_sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
 #ifdef SC_DEBUG
-	_debug( "DESTROY called for sc %lu refcnt: %d\n", sc->id, sc->refcnt );
+	_debug( "DESTROY called for sc %lu refcnt: %d\n", sc->id, sc->refcnt - 1 );
+#endif
+#ifdef USE_ITHREADS
+	if( sc->do_clone && sc->thread_id == THREAD_ID() ) {
+		sc->do_clone = FALSE;
+#ifdef SC_DEBUG
+		_debug( "Disabled futher CLONE for sc %lu\n", sc->id );
+#endif
+	}
 #endif
 	mod_sc_refcnt_dec( sc );
 

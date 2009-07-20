@@ -12,7 +12,7 @@ package Socket::Class;
 our( $VERSION );
 
 BEGIN {
-	$VERSION = '2.21';
+	$VERSION = '2.22';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -326,7 +326,7 @@ key-value pairs.
   blocking       Enable or disable blocking mode; default is enabled
   timeout        Timeout value for various operations as floating point
                  number;
-                 defaults to 15000 (15 seconds); currently used for connect
+                 defaults to 15000 (15 seconds); currently used by connect
 
 =for formatter perl
 

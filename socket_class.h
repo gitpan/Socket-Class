@@ -84,7 +84,7 @@ typedef unsigned char			uint8_t;
 typedef unsigned short			sa_family_t;
 #endif
 
-/* removing from perlio */
+/* remove from perlio */
 #undef accept
 #undef bind
 #undef connect
@@ -202,6 +202,15 @@ void debug_free();
 #endif /* SC_DEBUG > 1 */
 
 
+#ifdef USE_ITHREADS
+#ifdef _WIN32
+#define THREAD_ID()		(unsigned long) GetCurrentThreadId()
+#else
+#define THREAD_ID()		(unsigned long) pthread_self()
+#endif
+#endif /* USE_ITHREADS */
+
+
 #ifdef _WIN32
 
 #define EWOULDBLOCK				WSAEWOULDBLOCK
@@ -314,6 +323,10 @@ typedef struct st_socket_class {
 	char						*classname;
 	size_t						classname_len;
 	int							refcnt;
+#ifdef USE_ITHREADS
+	unsigned long				thread_id;
+	int							do_clone;
+#endif
 	long						last_errno;
 	char						last_error[256];
 	void						*user_data;

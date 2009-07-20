@@ -9,7 +9,7 @@ use Socket::Class;
 our( $VERSION, @ISA );
 
 BEGIN {
-	$VERSION = '1.20';
+	$VERSION = '1.30';
 	@ISA = qw(Socket::Class);
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
@@ -111,6 +111,11 @@ Additional arguments for the constructor.
                  to send to the client
   ca_file        A file of CA certificates in PEM format
   ca_path        A directory containing CA certificates in PEM format
+  ssl_method     One of "SSLv2", "SSLv23", "SSLv3" or "TLSv1"
+                 default method is SSLv23
+  cipher_list    A string representing a list of availables ciphers
+                 The format is described at
+                 http://www.openssl.org/docs/apps/ciphers.html
 
 =for formatter perl
 
@@ -132,7 +137,7 @@ A Socket::Class object.
 
 B<Return Values>
 
-Returns a Socket::Class::SSL object on sucess or UNDEF on failure.
+Returns a Socket::Class::SSL object on success or UNDEF on failure.
 
 B<Example>
 
@@ -185,7 +190,7 @@ Path to certificate file in PEM format.
 
 B<Return Values>
 
-Returns a TRUE value on sucess or UNDEF on failure.
+Returns a TRUE value on success or UNDEF on failure.
 
 =item B<set_private_key ( $private_key )>
 
@@ -205,7 +210,7 @@ Path to private key file in PEM format.
 
 B<Return Values>
 
-Returns a TRUE value on sucess or UNDEF on failure.
+Returns a TRUE value on success or UNDEF on failure.
 
 =item B<check_private_key ()>
 
@@ -244,7 +249,7 @@ Path to PEM formatted file with CA certificates to send to the client.
 
 B<Return Values>
 
-Returns a true value on sucess or undef on failure.
+Returns a true value on success or undef on failure.
 
 B<Note>
 
@@ -347,6 +352,46 @@ connection exists.
 
 Returns the version of the cipher in the current connection, or undef if no
 connection exists.
+
+=item B<set_ssl_method ( $name )>
+
+Sets the ssl method.
+
+B<Parameters>
+
+=over
+
+=item I<$name>
+
+One of "SSLv2", "SSLv23", "SSLv3" or "TLSv1"
+
+=back
+
+B<Return Values>
+
+Returns a true value on success or undef on failure.
+
+=item B<set_cipher_list ( $str )>
+
+Sets the list of available ciphers using the control string I<$str>.
+
+B<Parameters>
+
+=over
+
+=item I<$str>
+
+The cipher list consists of one or more cipher strings separated by colons.
+Commas or spaces are also acceptable separators but colons are normally used.
+
+See L<http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT>
+for details.
+
+=back
+
+B<Return Values>
+
+Returns a true value on success or undef on failure.
 
 =back
 

@@ -7,6 +7,10 @@ INLINE void socket_class_add( socket_class_t *sc ) {
 	GLOBAL_LOCK();
 	sc->id = ++ global.counter;
 	sc->refcnt = 1;
+#ifdef USE_ITHREADS
+	sc->thread_id = THREAD_ID();
+	sc->do_clone = TRUE;
+#endif
 	cascade = (size_t) sc->id % SC_CASCADE;
 #ifdef SC_DEBUG
 	_debug( "add sc %lu cascade %lu\n", sc->id, cascade );

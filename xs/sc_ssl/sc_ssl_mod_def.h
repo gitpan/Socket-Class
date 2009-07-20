@@ -112,7 +112,15 @@ void debug_free();
 #define AF_INET6				23
 #endif
 
+enum ssl_method {
+	sslv2,
+	sslv23,
+	sslv3,
+	tlsv1
+};
+
 typedef struct st_userdata {
+	enum ssl_method				method_id;
 	SSL_METHOD					*method;
 	SSL_CTX						*ctx;
 	SSL							*ssl;
@@ -126,6 +134,7 @@ typedef struct st_userdata {
 	char						*client_ca;
 	char						*ca_file;
 	char						*ca_path;
+	char						*cipher_list;
 	void						*user_data;
 	void						(*free_user_data) ( void *p );
 } userdata_t;
@@ -175,6 +184,8 @@ const char *mod_sc_ssl_get_cipher_name( sc_t *socket );
 const char *mod_sc_ssl_get_cipher_version( sc_t *socket );
 const char *mod_sc_ssl_get_version( sc_t *socket );
 int mod_sc_ssl_starttls( sc_t *socket );
+int mod_sc_ssl_set_ssl_method( sc_t *socket, const char *s );
+int mod_sc_ssl_set_cipher_list( sc_t *socket, const char *s );
 
 void free_userdata( void *p );
 const char *my_ssl_error( int code );
