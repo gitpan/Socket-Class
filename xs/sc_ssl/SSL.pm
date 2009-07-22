@@ -121,7 +121,7 @@ Additional arguments for the constructor.
 
 Detailed information about the arguments are documented in the functions below.
 
-=item B<starttls ( $sock )>
+=item B<starttls ( $sock [, %arg] )>
 
 Starts a TLS session on a connected socket.
 
@@ -132,6 +132,16 @@ B<Parameters>
 =item I<$sock>
 
 A Socket::Class object.
+
+=item I<%arg>
+
+Same arguments described in L<new()> plus one argument:
+
+=for formatter none
+
+  server         Set this to a true value on server side
+
+=for formatter perl
 
 =back
 

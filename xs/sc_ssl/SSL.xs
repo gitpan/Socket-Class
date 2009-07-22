@@ -756,16 +756,28 @@ PPCODE:
 # *****************************************************************************/
 
 void
-starttls( pkg, this )
+starttls( pkg, this, ... )
 	SV *pkg;
 	SV *this;
 PREINIT:
 	sc_t *socket;
 	SV *sv;
+	char **args;
+	int argc = 0, i, r;
 PPCODE:
 	if( (socket = mod_sc->sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
-	if( mod_sc_ssl_starttls( socket ) != SC_OK )
+	Newx( args, items - 1, char * );
+	/* read options */
+	for( i = 2; i < items - 1; ) {
+		args[argc++] = SvPV_nolen( ST(i) );
+		i++;
+		args[argc++] = SvPV_nolen( ST(i) );
+		i++;
+	}
+	r = mod_sc_ssl_starttls( socket, args, argc );
+	Safefree( args );
+	if( r != SC_OK )
 		XSRETURN_EMPTY;
 	/* create a new class */
 	if( mod_sc->sc_create_class( socket, SvPV_nolen( pkg ), &sv ) != SC_OK )

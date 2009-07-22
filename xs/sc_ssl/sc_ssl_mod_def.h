@@ -183,7 +183,7 @@ int mod_sc_ssl_enable_compatibility( sc_t *socket );
 const char *mod_sc_ssl_get_cipher_name( sc_t *socket );
 const char *mod_sc_ssl_get_cipher_version( sc_t *socket );
 const char *mod_sc_ssl_get_version( sc_t *socket );
-int mod_sc_ssl_starttls( sc_t *socket );
+int mod_sc_ssl_starttls( sc_t *socket, char **args, int argc );
 int mod_sc_ssl_set_ssl_method( sc_t *socket, const char *s );
 int mod_sc_ssl_set_cipher_list( sc_t *socket, const char *s );
 

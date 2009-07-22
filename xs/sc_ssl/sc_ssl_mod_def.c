@@ -917,20 +917,105 @@ const char *mod_sc_ssl_get_version( sc_t *socket ) {
 	return SSL_get_version( ud->ssl );
 }
 
-int mod_sc_ssl_starttls( sc_t *socket ) {
+int mod_sc_ssl_starttls( sc_t *socket, char **args, int argc ) {
 	userdata_t *ud;
-	int r;
+	int r, i, client = TRUE, err;
+	char *key, *val, *pk = NULL, *crt = NULL, *cca = NULL, *caf = NULL;
+	char *cap = NULL, *ciphlist = NULL, *sslmethod = NULL;
 	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
 	if( ud == NULL ) {
 		Newxz( ud, 1, userdata_t );
 		mod_sc->sc_set_userdata( socket, ud, free_userdata );
 	}
-	r = mod_sc_ssl_create_client_context( socket );
+	if( argc % 2 ) {
+		mod_sc->sc_set_errno( socket, EINVAL );
+		return SC_ERROR;
+	}
+	for( i = 0; i < argc; ) {
+		key = args[i++];
+		val = args[i++];
+		if( my_stricmp( key, "server" ) == 0 ) {
+			client = *val == '\0' || *val == '0';
+		}
+		else if( my_stricmp( key, "private_key" ) == 0 ) {
+			pk = val;
+		}
+		else if( my_stricmp( key, "certificate" ) == 0 ) {
+			crt = val;
+		}
+		else if( my_stricmp( key, "client_ca" ) == 0 ) {
+			cca = val;
+		}
+		else if( my_stricmp( key, "ca_file" ) == 0 ) {
+			caf = val;
+		}
+		else if( my_stricmp( key, "ca_path" ) == 0 ) {
+			cap = val;
+		}
+		else if( my_stricmp( key, "cipher_list" ) == 0 ) {
+			ciphlist = val;
+		}
+		else if( my_stricmp( key, "ssl_method" ) == 0 ) {
+			sslmethod = val;
+		}
+	}
+	if( sslmethod != NULL ) {
+		r = mod_sc_ssl_set_ssl_method( socket, sslmethod );
+		if( r != SC_OK )
+			return SC_ERROR;
+	}
+	else {
+		ud->method_id = sslv23;
+	}
+	if( pk != NULL ) {
+		r = mod_sc_ssl_set_private_key( socket, pk );
+		if( r != SC_OK )
+			return r;
+	}
+	if( crt != NULL ) {
+		r = mod_sc_ssl_set_certificate( socket, crt );
+		if( r != SC_OK )
+			return r;
+	}
+	if( cca != NULL ) {
+		r = mod_sc_ssl_set_client_ca( socket, cca);
+		if( r != SC_OK )
+			return r;
+	}
+	if( caf != NULL || cap != NULL ) {
+		r = mod_sc_ssl_set_verify_locations( socket, caf, cap );
+		if( r != SC_OK )
+			return r;
+	}
+	if( ciphlist != NULL ) {
+		r = mod_sc_ssl_set_cipher_list( socket, ciphlist );
+		if( r != SC_OK )
+			return r;
+	}
+	if( client )
+		r = mod_sc_ssl_create_client_context( socket );
+	else
+		r = mod_sc_ssl_create_server_context( socket );
 	if( r != SC_OK )
 		return r;
 	ud->ssl = SSL_new( ud->ctx );
 	SSL_set_fd( ud->ssl, (int) mod_sc->sc_get_handle( socket ) );
-	SSL_set_connect_state( ud->ssl );
+	if( client ) {
+		SSL_set_connect_state( ud->ssl );
+	}
+	else {
+		/* start the handshaking */
+		r = SSL_accept( ud->ssl );
+		if( r < 0 ) {
+			r = SSL_get_error( ud->ssl, r );
+			err = ERR_get_error();
+			if( err == 0 )
+				mod_sc->sc_set_error( socket, r, my_ssl_error( r ) );
+			else
+				mod_sc->sc_set_error( socket, err, ERR_reason_error_string( err ) );
+			return SC_ERROR;
+		}
+	}
 	return SC_OK;
 }
 

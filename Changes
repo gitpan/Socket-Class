@@ -1,5 +1,8 @@
 Revision history for Perl extension Socket::Class.
 
+version 2.23
+    - fixed starttls() to get it working on server side.
+
 version 2.22
     - added functions set_ssl_method(), set_cipher_list() to SSL module
     - changed SSL module to version 1.3
