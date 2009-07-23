@@ -1,5 +1,9 @@
 Revision history for Perl extension Socket::Class.
 
+version 2.24
+    - added function read_packet()
+    - updated readline() to support self defined line separators
+
 version 2.23
     - fixed starttls() to get it working on server side.
 

@@ -12,7 +12,7 @@ package Socket::Class;
 our( $VERSION );
 
 BEGIN {
-	$VERSION = '2.23';
+	$VERSION = '2.24';
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
@@ -112,6 +112,7 @@ B<Sending and Receiving>
 L<print|Socket::Class/print>,
 L<printf|Socket::Class/printf>,
 L<read|Socket::Class/read>,
+L<read_packet|Socket::Class/read_packet>,
 L<readline|Socket::Class/readline>,
 L<recv|Socket::Class/recv>,
 L<recvfrom|Socket::Class/recvfrom>,
@@ -1004,9 +1005,41 @@ B<Examples>
   $sock->say( 'hello client' );
 
 
-=item B<readline ()>
+=item B<readline ( [$separator [, $maxsize]] )>
 
-Reads characters from the socket and stops at \r\n, \n\r, \n, \r or \0.
+Reads characters from the socket and stops at \r\n, \n\r, \n, \r or \0
+if no I<$separator> has been specified.
+
+B<Parameters>
+
+I<$separator>
+
+Alternative line separator string.
+
+I<$maxsize>
+
+Stop reading at I<$maxsize> bytes. Default is 0 for unlimited size.
+
+B<Return Values>
+
+Returns a string value, or undef on error.
+Use L<errno()|Socket::Class/errno> and L<error()|Socket::Class/error>
+to retrieve the error code and message. 
+
+
+=item B<read_packet ( $separator [, $maxsize] )>
+
+Reads characters from the socket and stops I<$separator>.
+
+B<Parameters>
+
+I<$separator>
+
+Packet separator string.
+
+I<$maxsize>
+
+Stop reading at I<$maxsize> bytes. Default is 0 for unlimited size.
 
 B<Return Values>
 

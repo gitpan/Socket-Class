@@ -540,21 +540,31 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * readline( this )
+# * readline( this [, separator [, maxsize]] )
 # *****************************************************************************/
 
 void
-readline( this )
+readline( this, separator = NULL, maxsize = 0 )
 	SV *this;
+	char *separator;
+	int maxsize;
 PREINIT:
 	socket_class_t *sc;
-	int rlen;
+	int rlen, r;
 	char *rbuf;
 PPCODE:
 	if( (sc = mod_sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
-	if( mod_sc_readline( sc, &rbuf, &rlen ) != SC_OK )
-		XSRETURN_EMPTY;
+	if( separator != NULL ) {
+		r = mod_sc_read_packet(
+			sc, separator, (size_t) maxsize, &rbuf, &rlen );
+		if( r != SC_OK )
+			XSRETURN_EMPTY;
+	}
+	else {
+		if( mod_sc_readline( sc, &rbuf, &rlen ) != SC_OK )
+			XSRETURN_EMPTY;
+	}
 	ST(0) = sv_2mortal( newSVpvn( rbuf, rlen ) );
 	XSRETURN(1);
 
@@ -619,6 +629,29 @@ PPCODE:
 			XSRETURN_NO;
 		XSRETURN_IV( rlen );
 	}
+
+
+#/*****************************************************************************
+# * read_packet( this, separator [, maxsize]] )
+# *****************************************************************************/
+
+void
+read_packet( this, separator, maxsize = 0 )
+	SV *this;
+	char *separator;
+	int maxsize;
+PREINIT:
+	socket_class_t *sc;
+	int rlen, r;
+	char *rbuf;
+PPCODE:
+	if( (sc = mod_sc_get_socket( this )) == NULL )
+		XSRETURN_EMPTY;
+	r = mod_sc_read_packet( sc, separator, (size_t) maxsize, &rbuf, &rlen );
+	if( r != SC_OK )
+		XSRETURN_EMPTY;
+	ST(0) = sv_2mortal( newSVpvn( rbuf, rlen ) );
+	XSRETURN(1);
 
 
 #/*****************************************************************************

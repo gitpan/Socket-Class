@@ -219,6 +219,10 @@ struct st_mod_sc {
 	void * (*sc_get_userdata) ( sc_t *sock );
 	int (*sc_refcnt_dec) ( sc_t *socket );
 	int (*sc_refcnt_inc) ( sc_t *socket );
+	/* since version 2.3 */
+	int (*sc_read_packet) (
+		sc_t *socket, char *separator, size_t max, char **p_buf, int *p_len
+	);
 };
 
 #endif /* _MOD_SC_H_ */

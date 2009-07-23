@@ -165,6 +165,9 @@ int mod_sc_ssl_readline( sc_t *socket, char **p_buf, int *p_len );
 int mod_sc_ssl_writeln( sc_t *socket, const char *buf, int len, int *p_len );
 int mod_sc_ssl_printf( sc_t *socket, const char *fmt, ... );
 int mod_sc_ssl_vprintf( sc_t *socket, const char *fmt, va_list vl );
+int mod_sc_ssl_read_packet(
+	sc_t *socket, char *separator, size_t max, char **p_buf, int *p_len
+);
 int mod_sc_ssl_available( sc_t *socket, int *p_len );
 void mod_sc_ssl_set_userdata( sc_t *socket, void *p, void (*free) (void *p) );
 void *mod_sc_ssl_get_userdata( sc_t *socket );

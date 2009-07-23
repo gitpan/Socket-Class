@@ -9,11 +9,12 @@ use Socket::Class;
 our( $VERSION, @ISA );
 
 BEGIN {
-	$VERSION = '1.30';
+	$VERSION = '1.32';
 	@ISA = qw(Socket::Class);
 	require XSLoader;
 	XSLoader::load( __PACKAGE__, $VERSION );
 	*say = \&writeline;
+	*startssl = \&starttls;
 }
 
 1; # return
@@ -123,7 +124,10 @@ Detailed information about the arguments are documented in the functions below.
 
 =item B<starttls ( $sock [, %arg] )>
 
-Starts a TLS session on a connected socket.
+=item B<startssl ( $sock [, %arg] )>
+
+Starts a SSL/TLS session on a connected socket.
+I<startssl()> if a synonym for I<starttls()>.
 
 B<Parameters>
 
@@ -135,7 +139,8 @@ A Socket::Class object.
 
 =item I<%arg>
 
-Same arguments described in L<new()> plus one argument:
+Same arguments as described in L<new()|Socket::Class::SSL/new>
+plus one argument:
 
 =for formatter none
 
@@ -349,7 +354,7 @@ server context.
 
 =item B<enable_compatibility ()>
 
-Enables all bug workarounds available in the OpenSSL library.
+Enables all bug workarounds available with the OpenSSL library.
 
 See L<http://www.openssl.org/docs/ssl/SSL_CTX_set_options.html> for a list.
 
@@ -456,7 +461,7 @@ B<Example XS>
 
 See I<mod_sc_ssl.h> for the definition.
 
-Use I<Socket::Class::SSL::include_path()> to get the path to I<mod_ssl_sc.h>.
+Use I<Socket::Class::SSL::include_path()> to get the path to I<mod_sc_ssl.h>.
 
 =head1 SEE ALSO
 

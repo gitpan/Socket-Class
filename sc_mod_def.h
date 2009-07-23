@@ -25,6 +25,9 @@ int mod_sc_writeln( sc_t *sock, const char *buf, int len, int *p_len );
 int mod_sc_printf( sc_t *sock, const char *fmt, ... );
 int mod_sc_vprintf( sc_t *sock, const char *fmt, va_list vl );
 int mod_sc_readline( sc_t *sock, char **p_buf, int *p_len );
+int mod_sc_read_packet(
+	sc_t *sock, char *separator, size_t max, char **p_buf, int *p_len
+);
 int mod_sc_available( sc_t *sock, int *p_len );
 int mod_sc_pack_addr(
 	sc_t *sock, const char *host, const char *serv, sc_addr_t *addr );

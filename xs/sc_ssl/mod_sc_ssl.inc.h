@@ -36,6 +36,10 @@ struct st_mod_sc_ssl {
 	/* since version 1.3 */
 	int (*sc_ssl_set_ssl_method) ( sc_t *socket, const char *name );
 	int (*sc_ssl_set_cipher_list) ( sc_t *socket, const char *str );
+	/* since version 1.4 */
+	int (*sc_ssl_read_packet) (
+		sc_t *socket, char *separator, size_t max, char **p_buf, int *p_len
+	);
 };
 
 #endif /* _MOD_SC_SSL_H_ */

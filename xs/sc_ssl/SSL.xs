@@ -55,6 +55,7 @@ BOOT:
 	mod_sc_ssl.sc_ssl_starttls = mod_sc_ssl_starttls;
 	mod_sc_ssl.sc_ssl_set_ssl_method = mod_sc_ssl_set_ssl_method;
 	mod_sc_ssl.sc_ssl_set_cipher_list = mod_sc_ssl_set_cipher_list;
+	mod_sc_ssl.sc_ssl_read_packet = mod_sc_ssl_read_packet;
 	/* store the c module interface in the modglobal hash */
 	(void) hv_store( PL_modglobal,
 		"Socket::Class::SSL", 18, newSViv( PTR2IV( &mod_sc_ssl ) ), 0 );
@@ -437,21 +438,31 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * readline( this )
+# * readline( this [, separator [, maxsize]] )
 # *****************************************************************************/
 
 void
-readline( this )
+readline( this, separator = NULL, maxsize = 0 )
 	SV *this;
+	char *separator;
+	int maxsize;
 PREINIT:
 	sc_t *socket;
-	int rlen;
+	int rlen, r;
 	char *rbuf;
 PPCODE:
 	if( (socket = mod_sc->sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
-	if( mod_sc_ssl_readline( socket, &rbuf, &rlen ) != SC_OK )
-		XSRETURN_EMPTY;
+	if( separator != NULL ) {
+		r = mod_sc_ssl_read_packet(
+			socket, separator, (size_t) maxsize, &rbuf, &rlen );
+		if( r != SC_OK )
+			XSRETURN_EMPTY;
+	}
+	else {
+		if( mod_sc_ssl_readline( socket, &rbuf, &rlen ) != SC_OK )
+			XSRETURN_EMPTY;
+	}
 	ST(0) = sv_2mortal( newSVpvn( rbuf, rlen ) );
 	XSRETURN(1);
 
@@ -516,6 +527,30 @@ PPCODE:
 			XSRETURN_NO;
 		XSRETURN_IV( rlen );
 	}
+
+
+#/*****************************************************************************
+# * read_packet( this, separator [, maxsize] )
+# *****************************************************************************/
+
+void
+read_packet( this, separator, maxsize = 0 )
+	SV *this;
+	char *separator;
+	int maxsize;
+PREINIT:
+	sc_t *socket;
+	int rlen, r;
+	char *rbuf;
+PPCODE:
+	if( (socket = mod_sc->sc_get_socket( this )) == NULL )
+		XSRETURN_EMPTY;
+	r = mod_sc_ssl_read_packet(
+		socket, separator, (size_t) maxsize, &rbuf, &rlen );
+	if( r != SC_OK )
+		XSRETURN_EMPTY;
+	ST(0) = sv_2mortal( newSVpvn( rbuf, rlen ) );
+	XSRETURN(1);
 
 
 #/*****************************************************************************

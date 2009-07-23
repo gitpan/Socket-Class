@@ -941,6 +941,99 @@ error:
 	return SC_ERROR;
 }
 
+int mod_sc_read_packet(
+	sc_t *sock, char *separator, size_t max, char **p_buf, int *p_len
+) {
+	int r;
+	size_t i, pos = 0, len = 256, seplen;
+	char *p, *sep;
+	p = sock->buffer;
+	for( sep = separator, seplen = 0; *sep != '\0'; sep++, seplen++ );
+	if( seplen == 0 ) {
+		mod_sc_set_errno( sock, EINVAL );
+		return SC_ERROR;
+	}
+	sep = separator;
+	if( !max )
+		max = (size_t) -1;
+	while( 1 ) {
+		if( sock->buffer_len < pos + len ) {
+			sock->buffer_len = pos + len;
+			Renew( sock->buffer, sock->buffer_len, char );
+			p = sock->buffer + pos;
+		}
+		r = recv( sock->sock, p, (int) len, MSG_PEEK );
+#ifdef SC_DEBUG
+		_debug( "recv MSG_PEEK %d = %d\n", len, r );
+#endif
+		if( r == SOCKET_ERROR ) {
+			if( pos > 0 )
+				break;
+			switch( r = Socket_errno() ) {
+			case EWOULDBLOCK:
+				/* threat not as an error */
+				sock->buffer[0] = '\0';
+				*p_buf = sock->buffer;
+				*p_len = 0;
+				SOCK_ERRNO( sock, 0 );
+				return SC_OK;
+			}
+			SOCK_ERRNO( sock, r );
+			goto error;
+		}
+		else if( r == 0 ) {
+			if( pos > 0 )
+				break;
+			SOCK_ERRNO( sock, ECONNRESET );
+			goto error;
+		}
+		for( i = 0; i < (size_t) r; i ++, p ++ ) {
+			if( pos + i == max ) {
+#ifdef SC_DEBUG
+				_debug( "packet max size %u reached\n", max );
+#endif
+				*p = '\0';
+				*p_buf = sock->buffer;
+				*p_len = (int) (pos + i);
+				if( i > 0 )
+					recv( sock->sock, sock->buffer + pos, (int) i, 0 );
+				return SC_OK;
+			}
+			if( *p != *sep ) {
+				sep = separator;
+				continue;
+			}
+			sep++;
+			if( *sep != '\0' )
+				continue;
+			/* found packet separator */
+#ifdef SC_DEBUG
+			_debug( "found packet separator at %d + %d of %d\n", pos, i, r );
+#endif
+			i++;
+			*p = '\0';
+			*p_buf = sock->buffer;
+			*p_len = (int) (pos + i - seplen);
+			recv( sock->sock, sock->buffer + pos, (int) i, 0 );
+			return SC_OK;
+		}
+		recv( sock->sock, sock->buffer + pos, (int) i, 0 );
+		pos += i;
+		if( r < (int) len )
+			break;
+	}
+	sock->buffer[pos] = '\0';
+	*p_buf = sock->buffer;
+	*p_len = (int) pos;
+	return SC_OK;
+error:
+#ifdef SC_DEBUG
+	_debug( "readline error %u\n", sock->last_errno );
+#endif
+	sock->state = SC_STATE_ERROR;
+	return SC_ERROR;
+}
+
 int mod_sc_available( sc_t *sock, int *p_len ) {
 	socklen_t ol = sizeof(int);
 	int r, len;
@@ -2186,4 +2279,5 @@ const mod_sc_t mod_sc = {
 	mod_sc_get_userdata,
 	mod_sc_refcnt_dec,
 	mod_sc_refcnt_inc,
+	mod_sc_read_packet,
 };

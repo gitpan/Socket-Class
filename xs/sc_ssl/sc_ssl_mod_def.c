@@ -444,6 +444,81 @@ int mod_sc_ssl_readline( sc_t *socket, char **p_buf, int *p_len ) {
 	return SC_OK;
 }
 
+int mod_sc_ssl_read_packet(
+	sc_t *socket, char *separator, size_t max, char **p_buf, int *p_len
+) {
+	userdata_t *ud;
+	int r, l;
+	size_t i, pos = 0, len = 256, seplen;
+	char *p, *sep;
+	for( sep = separator, seplen = 0; *sep != '\0'; sep++, seplen++ );
+	if( seplen == 0 ) {
+		mod_sc->sc_set_errno( socket, EINVAL );
+		return SC_ERROR;
+	}
+	sep = separator;
+	if( !max )
+		max = (size_t) -1;
+	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	p = ud->buffer;
+	while( 1 ) {
+		if( ud->buffer_len < (int) (pos + len) ) {
+			ud->buffer_len = (int) (pos + len);
+			Renew( ud->buffer, ud->buffer_len, char );
+			p = ud->buffer + pos;
+		}
+		r = mod_sc_ssl_recv( socket, p, (int) len, MSG_PEEK, &l );
+		if( r != SC_OK ) {
+			if( pos > 0 )
+				break;
+			return SC_ERROR;
+		}
+		if( l == 0 ) {
+			*p_buf = ud->buffer;
+			*p_len = (int) pos;
+			return SC_OK;
+		}
+		for( i = 0; i < (size_t) l; i ++, p ++ ) {
+			if( pos + i == max ) {
+#ifdef SC_DEBUG
+				_debug( "packet max size %u reached\n", max );
+#endif
+				*p = '\0';
+				*p_buf = ud->buffer;
+				*p_len = (int) (pos + i);
+				if( i > 0 )
+					mod_sc_ssl_recv( socket, ud->buffer + pos, (int) i, 0, &l );
+				return SC_OK;
+			}
+			if( *p != *sep ) {
+				sep = separator;
+				continue;
+			}
+			sep++;
+			if( *sep != '\0' )
+				continue;
+			/* found packet separator */
+#ifdef SC_DEBUG
+			_debug( "found packet separator at %d + %d of %d\n", pos, i, l );
+#endif
+			i++;
+			*p = '\0';
+			*p_buf = ud->buffer;
+			*p_len = (int) (pos + i - seplen);
+			mod_sc_ssl_recv( socket, ud->buffer + pos, (int) i, 0, &l );
+			return SC_OK;
+		}
+		mod_sc_ssl_recv( socket, ud->buffer + pos, (int) i, 0, &l );
+		pos += i;
+		if( r < (int) len )
+			break;
+	}
+	ud->buffer[pos] = '\0';
+	*p_buf = ud->buffer;
+	*p_len = (int) pos;
+	return SC_OK;
+}
+
 int mod_sc_ssl_writeln( sc_t *socket, const char *buf, int len, int *p_len ) {
 	userdata_t *ud;
 	char *p;
@@ -1008,11 +1083,11 @@ int mod_sc_ssl_starttls( sc_t *socket, char **args, int argc ) {
 		r = SSL_accept( ud->ssl );
 		if( r < 0 ) {
 			r = SSL_get_error( ud->ssl, r );
-			err = ERR_get_error();
-			if( err == 0 )
+			if( (err = ERR_get_error()) == 0 ) {
 				mod_sc->sc_set_error( socket, r, my_ssl_error( r ) );
-			else
-				mod_sc->sc_set_error( socket, err, ERR_reason_error_string( err ) );
+				return SC_ERROR;
+			}
+			mod_sc->sc_set_error( socket, err, ERR_reason_error_string( err ) );
 			return SC_ERROR;
 		}
 	}
