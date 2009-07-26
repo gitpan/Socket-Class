@@ -156,6 +156,7 @@ struct st_sc_ssl_global {
 	sc_ssl_ctx_t				*ctx;
 	int							counter;
 #ifdef USE_ITHREADS
+	int							destroyed;
 	perl_mutex					thread_lock;
 #endif
 };

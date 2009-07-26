@@ -227,8 +227,11 @@ int mod_sc_ssl_accept( sc_t *socket, sc_t **r_client ) {
 	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
 	Newxz( udc, 1, userdata_t );
 	mod_sc->sc_set_userdata( client, udc, free_userdata );
+	/* use context of listen socket */
+	udc->sc_ssl_ctx = ud->sc_ssl_ctx;
+	udc->sc_ssl_ctx->refcnt++;
 	/* get new SSL state with context */
-	udc->ssl = SSL_new( ud->sc_ssl_ctx->ctx );
+	udc->ssl = SSL_new( udc->sc_ssl_ctx->ctx );
 	/* set connection to SSL state */
 	SSL_set_fd( udc->ssl, (int) mod_sc->sc_get_handle( client ) );
 	/* start the handshaking */
@@ -1325,7 +1328,8 @@ void free_context( sc_ssl_ctx_t *ctx ) {
 int remove_context( sc_ssl_ctx_t *ctx ) {
 	sc_ssl_ctx_t *cp = NULL, *cc;
 #ifdef USE_ITHREADS
-	MUTEX_LOCK( &global.thread_lock );
+	if( !global.destroyed )
+		MUTEX_LOCK( &global.thread_lock );
 #endif
 	cc = global.ctx;
 	while( cc != NULL ) {
@@ -1341,7 +1345,8 @@ int remove_context( sc_ssl_ctx_t *ctx ) {
 		cc = cc->next;
 	}
 #ifdef USE_ITHREADS
-	MUTEX_UNLOCK( &global.thread_lock );
+	if( !global.destroyed )
+		MUTEX_UNLOCK( &global.thread_lock );
 #endif
 	if( ctx == NULL )
 		return SC_OK;
@@ -1360,7 +1365,7 @@ void free_userdata( void *p ) {
 		SSL_free( ud->ssl );
 	Safefree( ud->rcvbuf );
 	Safefree( ud->buffer );
-	if( --ctx->refcnt <= 0 ) {
+	if( ctx != NULL && --ctx->refcnt <= 0 ) {
 		remove_context( ctx );
 		free_context( ctx );
 	}

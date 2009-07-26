@@ -104,6 +104,7 @@ CODE:
 #endif
 #ifdef USE_ITHREADS
 	MUTEX_DESTROY( &global.thread_lock );
+	global.destroyed = TRUE;
 #endif
 #if SC_DEBUG > 1
 	debug_free();
