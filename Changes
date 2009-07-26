@@ -1,5 +1,8 @@
 Revision history for Perl extension Socket::Class.
 
+version 2.251
+    - fixed incomplete distribution
+
 version 2.25
     - added support for shared context in SSL module
     - global errors are stored in the $@ variable too

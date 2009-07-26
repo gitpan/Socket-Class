@@ -37,6 +37,7 @@ xs/sc_const/Const.pod
 xs/sc_const/Const.xs
 xs/sc_const/Makefile.PL
 
+xs/sc_ssl/CTX.pod
 xs/sc_ssl/install_files.PL
 xs/sc_ssl/Makefile.PL
 xs/sc_ssl/mod_sc_ssl.inc.h
