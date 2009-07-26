@@ -135,11 +135,12 @@ A Socket::Class object.
 =item I<%arg>
 
 Same arguments as described in L<new()|Socket::Class::SSL/new>
-plus one argument:
+plus additional arguments:
 
 =for formatter none
 
   server         Set this to a true value on server side
+  use_ctx        Use shared context. See Socket::Class::SSL::CTX for details
 
 =for formatter perl
 

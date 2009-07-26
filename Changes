@@ -1,5 +1,8 @@
 Revision history for Perl extension Socket::Class.
 
+version 2.253
+    - updated documentation for starttls()
+
 version 2.252
     - fixed broken SSL module
 
