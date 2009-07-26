@@ -112,10 +112,17 @@ Additional arguments for the constructor.
   cipher_list    A string representing a list of availables ciphers
                  The format is described at
                  http://www.openssl.org/docs/apps/ciphers.html
+  
+  use_ctx        Use a shared context. All other parameters will be ignored.
+                 See Socket::Class::SSL::CTX for details
 
 =for formatter perl
 
-Detailed information about the arguments are documented in the functions below.
+More information about the arguments are documented in the functions below.
+
+B<See Also>
+
+L<Socket::Class::SSL::CTX to create a shared context|Socket::Class::SSL::CTX>
 
 =item B<starttls ( $sock [, %arg] )>
 
@@ -135,12 +142,11 @@ A Socket::Class object.
 =item I<%arg>
 
 Same arguments as described in L<new()|Socket::Class::SSL/new>
-plus additional arguments:
+plus one argument:
 
 =for formatter none
 
   server         Set this to a true value on server side
-  use_ctx        Use shared context. See Socket::Class::SSL::CTX for details
 
 =for formatter perl
 

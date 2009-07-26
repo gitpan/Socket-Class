@@ -1,4 +1,8 @@
 package Socket::Class::SSL;
+# =============================================================================
+# Socket::Class::SSL - SSL support to Socket::Class
+# Use "perldoc Socket::Class::SSL" for documenation
+# =============================================================================
 
 # uncomment for debugging
 #use strict;
