@@ -3,7 +3,7 @@
 mod_sc_t *mod_sc;
 mod_sc_ssl_t mod_sc_ssl;
 
-MODULE = Socket::Class::SSL		PACKAGE = Socket::Class::SSL
+MODULE = Socket::Class::SSL	PACKAGE = Socket::Class::SSL	PREFIX = SSL_
 
 BOOT:
 {
@@ -56,6 +56,18 @@ BOOT:
 	mod_sc_ssl.sc_ssl_set_ssl_method = mod_sc_ssl_set_ssl_method;
 	mod_sc_ssl.sc_ssl_set_cipher_list = mod_sc_ssl_set_cipher_list;
 	mod_sc_ssl.sc_ssl_read_packet = mod_sc_ssl_read_packet;
+	mod_sc_ssl.sc_ssl_ctx_create = mod_sc_ssl_ctx_create;
+	mod_sc_ssl.sc_ssl_ctx_destroy = mod_sc_ssl_ctx_destroy;
+	mod_sc_ssl.sc_ssl_ctx_create_class = mod_sc_ssl_ctx_create_class;
+	mod_sc_ssl.sc_ssl_ctx_from_class = mod_sc_ssl_ctx_from_class;
+	mod_sc_ssl.sc_ssl_ctx_set_ssl_method = mod_sc_ssl_ctx_set_ssl_method;
+	mod_sc_ssl.sc_ssl_ctx_set_private_key = mod_sc_ssl_ctx_set_private_key;
+	mod_sc_ssl.sc_ssl_ctx_set_certificate = mod_sc_ssl_ctx_set_certificate;
+	mod_sc_ssl.sc_ssl_ctx_set_client_ca = mod_sc_ssl_ctx_set_client_ca;
+	mod_sc_ssl.sc_ssl_ctx_set_verify_locations = mod_sc_ssl_ctx_set_verify_locations;
+	mod_sc_ssl.sc_ssl_ctx_set_cipher_list = mod_sc_ssl_ctx_set_cipher_list;
+	mod_sc_ssl.sc_ssl_ctx_check_private_key = mod_sc_ssl_ctx_check_private_key;
+	mod_sc_ssl.sc_ssl_ctx_enable_compatibility = mod_sc_ssl_ctx_enable_compatibility;
 	/* store the c module interface in the modglobal hash */
 	(void) hv_store( PL_modglobal,
 		"Socket::Class::SSL", 18, newSViv( PTR2IV( &mod_sc_ssl ) ), 0 );
@@ -63,28 +75,35 @@ BOOT:
 	SSL_library_init();
 	SSL_load_error_strings();
 	OpenSSL_add_all_algorithms();
+	Zero( &global, 1, sc_ssl_global_t );
+#ifdef USE_ITHREADS
+	MUTEX_INIT( &global.thread_lock );
+#endif
 }
 
 #/*****************************************************************************
-# * c_module()
+# * SSL_c_module()
 # *****************************************************************************/
 void
-c_module( ... )
+SSL_c_module( ... )
 PPCODE:
 	/* returns the c module interface */
 	XSRETURN_IV( PTR2IV( &mod_sc_ssl ) );
 
 
 #/*****************************************************************************
-# * END()
+# * SSL_END()
 # *****************************************************************************/
 
 void
-END( ... )
+SSL_END( ... )
 CODE:
-	if( items ) {} /* avoid compiler warning */
+	(void) items; /* avoid compiler warning */
 #ifdef SC_DEBUG
 	_debug( "END called\n" );
+#endif
+#ifdef USE_ITHREADS
+	MUTEX_DESTROY( &global.thread_lock );
 #endif
 #if SC_DEBUG > 1
 	debug_free();
@@ -92,26 +111,26 @@ CODE:
 
 
 #/*****************************************************************************
-# * CLONE()
+# * SSL_CLONE()
 # *****************************************************************************/
 
 #ifdef USE_ITHREADS
 
 void
-CLONE( ... )
+SSL_CLONE( ... )
 PPCODE:
 	/* prevent double calls in super module */
-	if( items ) {} /* avoid compiler warning */
+	(void) items; /* avoid compiler warning */
 
 #endif
 
 
 #/*****************************************************************************
-# * new( this, %args )
+# * SSL_new( this, %args )
 # *****************************************************************************/
 
 void
-new( pkg, ... )
+SSL_new( pkg, ... )
 	SV *pkg;
 PREINIT:
 	sc_t *socket;
@@ -144,11 +163,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * connect( this, host, serv, timeout )
+# * SSL_connect( this, host, serv, timeout )
 # *****************************************************************************/
 
 void
-connect( this, ... )
+SSL_connect( this, ... )
 	SV *this;
 PREINIT:
 	sc_t *socket;
@@ -193,11 +212,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * listen( this [, queue] )
+# * SSL_listen( this [, queue] )
 # *****************************************************************************/
 
 void
-listen( this, queue = SOMAXCONN )
+SSL_listen( this, queue = SOMAXCONN )
 	SV *this;
 	int queue;
 PREINIT:
@@ -211,11 +230,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * accept( this [, pkg] )
+# * SSL_accept( this [, pkg] )
 # *****************************************************************************/
 
 void
-accept( this, pkg = NULL )
+SSL_accept( this, pkg = NULL )
 	SV *this;
 	char *pkg;
 PREINIT:
@@ -239,11 +258,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * recv( this, buf, len [, flags] )
+# * SSL_recv( this, buf, len [, flags] )
 # *****************************************************************************/
 
 void
-recv( this, buf, len, flags = 0 )
+SSL_recv( this, buf, len, flags = 0 )
 	SV *this;
 	SV *buf;
 	unsigned int len;
@@ -269,11 +288,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * send( this, buf [, flags] )
+# * SSL_send( this, buf [, flags] )
 # *****************************************************************************/
 
 void
-send( this, buf, flags = 0 )
+SSL_send( this, buf, flags = 0 )
 	SV *this;
 	SV *buf;
 	unsigned int flags;
@@ -294,11 +313,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * recvfrom( this, buf, len [, flags] )
+# * SSL_recvfrom( this, buf, len [, flags] )
 # *****************************************************************************/
 
 void
-recvfrom( this, buf, len, flags = 0 )
+SSL_recvfrom( this, buf, len, flags = 0 )
 	SV *this;
 	SV *buf;
 	unsigned int len;
@@ -328,11 +347,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * sendto( this, buf [, to [, flags]] )
+# * SSL_sendto( this, buf [, to [, flags]] )
 # *****************************************************************************/
 
 void
-sendto( this, buf, to = NULL, flags = 0 )
+SSL_sendto( this, buf, to = NULL, flags = 0 )
 	SV *this;
 	SV *buf;
 	SV *to;
@@ -363,11 +382,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * read( this, buf, len )
+# * SSL_read( this, buf, len )
 # *****************************************************************************/
 
 void
-read( this, buf, len )
+SSL_read( this, buf, len )
 	SV *this;
 	SV *buf;
 	int len;
@@ -392,11 +411,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * write( this, buf [, start [, length]] )
+# * SSL_write( this, buf [, start [, length]] )
 # *****************************************************************************/
 
 void
-write( this, buf, ... )
+SSL_write( this, buf, ... )
 	SV *this;
 	SV *buf;
 PREINIT:
@@ -438,11 +457,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * readline( this [, separator [, maxsize]] )
+# * SSL_readline( this [, separator [, maxsize]] )
 # *****************************************************************************/
 
 void
-readline( this, separator = NULL, maxsize = 0 )
+SSL_readline( this, separator = NULL, maxsize = 0 )
 	SV *this;
 	char *separator;
 	int maxsize;
@@ -468,11 +487,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * writeline( this, buf )
+# * SSL_writeline( this, buf )
 # *****************************************************************************/
 
 void
-writeline( this, buf )
+SSL_writeline( this, buf )
 	SV *this;
 	SV *buf;
 PREINIT:
@@ -492,11 +511,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * print( this )
+# * SSL_print( this )
 # *****************************************************************************/
 
 void
-print( this, ... )
+SSL_print( this, ... )
 	SV *this;
 PREINIT:
 	sc_t *socket;
@@ -530,11 +549,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * read_packet( this, separator [, maxsize] )
+# * SSL_read_packet( this, separator [, maxsize] )
 # *****************************************************************************/
 
 void
-read_packet( this, separator, maxsize = 0 )
+SSL_read_packet( this, separator, maxsize = 0 )
 	SV *this;
 	char *separator;
 	int maxsize;
@@ -554,11 +573,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * to_string( this )
+# * SSL_to_string( this )
 # *****************************************************************************/
 
 void
-to_string( this )
+SSL_to_string( this )
 	SV *this;
 PREINIT:
 	sc_t *socket;
@@ -583,11 +602,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * set_private_key( this, private_key )
+# * SSL_set_private_key( this, private_key )
 # *****************************************************************************/
 
 void
-set_private_key( this, private_key )
+SSL_set_private_key( this, private_key )
 	SV *this;
 	char *private_key;
 PREINIT:
@@ -601,11 +620,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * set_certificate( this, certificate )
+# * SSL_set_certificate( this, certificate )
 # *****************************************************************************/
 
 void
-set_certificate( this, certificate )
+SSL_set_certificate( this, certificate )
 	SV *this;
 	char *certificate;
 PREINIT:
@@ -619,11 +638,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * set_client_ca( this, client_ca )
+# * SSL_set_client_ca( this, client_ca )
 # *****************************************************************************/
 
 void
-set_client_ca( this, client_ca )
+SSL_set_client_ca( this, client_ca )
 	SV *this;
 	char *client_ca;
 PREINIT:
@@ -637,11 +656,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * set_verify_locations( this, ca_file [, ca_path] )
+# * SSL_set_verify_locations( this, ca_file [, ca_path] )
 # *****************************************************************************/
 
 void
-set_verify_locations( this, ca_file, ca_path = NULL )
+SSL_set_verify_locations( this, ca_file, ca_path = NULL )
 	SV *this;
 	SV *ca_file;
 	SV *ca_path;
@@ -659,11 +678,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * create_client_context( this )
+# * SSL_create_client_context( this )
 # *****************************************************************************/
 
 void
-create_client_context( this )
+SSL_create_client_context( this )
 	SV *this;
 PREINIT:
 	sc_t *socket;
@@ -676,11 +695,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * create_server_context( this )
+# * SSL_create_server_context( this )
 # *****************************************************************************/
 
 void
-create_server_context( this )
+SSL_create_server_context( this )
 	SV *this;
 PREINIT:
 	sc_t *socket;
@@ -693,11 +712,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * check_private_key( this )
+# * SSL_check_private_key( this )
 # *****************************************************************************/
 
 void
-check_private_key( this )
+SSL_check_private_key( this )
 	SV *this;
 PREINIT:
 	sc_t *socket;
@@ -710,11 +729,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * enable_compatibility( this )
+# * SSL_enable_compatibility( this )
 # *****************************************************************************/
 
 void
-enable_compatibility( this )
+SSL_enable_compatibility( this )
 	SV *this;
 PREINIT:
 	sc_t *socket;
@@ -727,11 +746,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * get_cipher_name( this )
+# * SSL_get_cipher_name( this )
 # *****************************************************************************/
 
 void
-get_cipher_name( this )
+SSL_get_cipher_name( this )
 	SV *this;
 PREINIT:
 	sc_t *socket;
@@ -747,11 +766,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * get_cipher_version( this )
+# * SSL_get_cipher_version( this )
 # *****************************************************************************/
 
 void
-get_cipher_version( this )
+SSL_get_cipher_version( this )
 	SV *this;
 PREINIT:
 	sc_t *socket;
@@ -767,11 +786,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * get_ssl_version( this )
+# * SSL_get_ssl_version( this )
 # *****************************************************************************/
 
 void
-get_ssl_version( this )
+SSL_get_ssl_version( this )
 	SV *this;
 PREINIT:
 	sc_t *socket;
@@ -787,17 +806,17 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * starttls( pkg, this )
+# * SSL_starttls( pkg, this )
 # *****************************************************************************/
 
 void
-starttls( pkg, this, ... )
+SSL_starttls( pkg, this, ... )
 	SV *pkg;
 	SV *this;
 PREINIT:
 	sc_t *socket;
 	SV *sv;
-	char **args;
+	char **args, *key, *val;
 	int argc = 0, i, r;
 PPCODE:
 	if( (socket = mod_sc->sc_get_socket( this )) == NULL )
@@ -805,10 +824,22 @@ PPCODE:
 	Newx( args, items - 1, char * );
 	/* read options */
 	for( i = 2; i < items - 1; ) {
-		args[argc++] = SvPV_nolen( ST(i) );
+		key = SvPV_nolen( ST(i) );
 		i++;
-		args[argc++] = SvPV_nolen( ST(i) );
+		switch( *key ) {
+		case 'u':
+		case 'U':
+			if( my_stricmp( key, "use_ctx" ) == 0 ) {
+				val = (char *) mod_sc_ssl_ctx_from_class( ST(i) );
+				goto got_val;
+			}
+			break;
+		}
+		val = SvPV_nolen( ST(i) );
+got_val:
 		i++;
+		args[argc++] = key;
+		args[argc++] = val;
 	}
 	r = mod_sc_ssl_starttls( socket, args, argc );
 	Safefree( args );
@@ -822,11 +853,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * set_ssl_method( this, name )
+# * SSL_set_ssl_method( this, name )
 # *****************************************************************************/
 
 void
-set_ssl_method( this, name )
+SSL_set_ssl_method( this, name )
 	SV *this;
 	char *name;
 PREINIT:
@@ -840,11 +871,11 @@ PPCODE:
 
 
 #/*****************************************************************************
-# * set_cipher_list( this, str )
+# * SSL_set_cipher_list( this, str )
 # *****************************************************************************/
 
 void
-set_cipher_list( this, str )
+SSL_set_cipher_list( this, str )
 	SV *this;
 	char *str;
 PREINIT:
@@ -853,6 +884,203 @@ PPCODE:
 	if( (socket = mod_sc->sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
 	if( mod_sc_ssl_set_cipher_list( socket, str ) != SC_OK )
+		XSRETURN_EMPTY;
+	XSRETURN_YES;
+
+
+#/*############################### SSL CONTEXT ###############################*/
+
+
+MODULE = Socket::Class::SSL	PACKAGE = Socket::Class::SSL::CTX	PREFIX = CTX_
+
+
+#/*****************************************************************************
+# * CTX_new( pkg, ... )
+# *****************************************************************************/
+
+void
+CTX_new( pkg, ... )
+	char *pkg;
+PREINIT:
+	sc_ssl_ctx_t *ctx;
+	int r, i, argc = 0;
+	SV *sv;
+	char **args;
+PPCODE:
+	(void) pkg; /* unused */
+	Newx( args, items - 1, char * );
+	/* read options */
+	for( i = 1; i < items - 1; ) {
+		args[argc ++] = SvPV_nolen( ST(i) );
+		i ++;
+		args[argc ++] = SvPV_nolen( ST(i) );
+		i ++;
+	}
+	r = mod_sc_ssl_ctx_create( args, argc, &ctx );
+	Safefree( args );
+	if( r != SC_OK )
+		XSRETURN_EMPTY;
+	r = mod_sc_ssl_ctx_create_class( ctx, &sv );
+	if( r != SC_OK )
+		XSRETURN_EMPTY;
+	ST(0) = sv_2mortal( sv );
+	XSRETURN(1);
+
+
+#/*****************************************************************************
+# * CTX_DESTROY( this, ... )
+# *****************************************************************************/
+
+void
+CTX_DESTROY( this, ... )
+	SV *this;
+PREINIT:
+	sc_ssl_ctx_t *ctx;
+PPCODE:
+	if( (ctx = mod_sc_ssl_ctx_from_class( this )) == NULL )
+		XSRETURN_EMPTY;
+	mod_sc_ssl_ctx_destroy( ctx );
+
+
+#/*****************************************************************************
+# * CTX_set_ssl_method( this, name )
+# *****************************************************************************/
+
+void
+CTX_set_ssl_method( this, name )
+	SV *this;
+	char *name;
+PREINIT:
+	sc_ssl_ctx_t *ctx;
+PPCODE:
+	if( (ctx = mod_sc_ssl_ctx_from_class( this )) == NULL )
+		XSRETURN_EMPTY;
+	if( mod_sc_ssl_ctx_set_ssl_method( ctx, name ) != SC_OK )
+		XSRETURN_EMPTY;
+	XSRETURN_YES;
+
+
+#/*****************************************************************************
+# * CTX_set_private_key( this, pk )
+# *****************************************************************************/
+
+void
+CTX_set_private_key( this, pk )
+	SV *this;
+	char *pk;
+PREINIT:
+	sc_ssl_ctx_t *ctx;
+PPCODE:
+	if( (ctx = mod_sc_ssl_ctx_from_class( this )) == NULL )
+		XSRETURN_EMPTY;
+	if( mod_sc_ssl_ctx_set_private_key( ctx, pk ) != SC_OK )
+		XSRETURN_EMPTY;
+	XSRETURN_YES;
+
+
+#/*****************************************************************************
+# * CTX_set_certificate( this, crt )
+# *****************************************************************************/
+
+void
+CTX_set_certificate( this, crt )
+	SV *this;
+	char *crt;
+PREINIT:
+	sc_ssl_ctx_t *ctx;
+PPCODE:
+	if( (ctx = mod_sc_ssl_ctx_from_class( this )) == NULL )
+		XSRETURN_EMPTY;
+	if( mod_sc_ssl_ctx_set_certificate( ctx, crt ) != SC_OK )
+		XSRETURN_EMPTY;
+	XSRETURN_YES;
+
+
+#/*****************************************************************************
+# * CTX_set_client_ca( this, client_ca )
+# *****************************************************************************/
+
+void
+CTX_set_client_ca( this, client_ca )
+	SV *this;
+	char *client_ca;
+PREINIT:
+	sc_ssl_ctx_t *ctx;
+PPCODE:
+	if( (ctx = mod_sc_ssl_ctx_from_class( this )) == NULL )
+		XSRETURN_EMPTY;
+	if( mod_sc_ssl_ctx_set_client_ca( ctx, client_ca ) != SC_OK )
+		XSRETURN_EMPTY;
+	XSRETURN_YES;
+
+
+#/*****************************************************************************
+# * CTX_set_verify_locations( this, ca_file )
+# *****************************************************************************/
+
+void
+CTX_set_verify_locations( this, ca_file, ca_path = NULL )
+	SV *this;
+	char *ca_file;
+	char *ca_path;
+PREINIT:
+	sc_ssl_ctx_t *ctx;
+PPCODE:
+	if( (ctx = mod_sc_ssl_ctx_from_class( this )) == NULL )
+		XSRETURN_EMPTY;
+	if( mod_sc_ssl_ctx_set_verify_locations( ctx, ca_file, ca_path ) != SC_OK )
+		XSRETURN_EMPTY;
+	XSRETURN_YES;
+
+
+#/*****************************************************************************
+# * CTX_set_cipher_list( this, str )
+# *****************************************************************************/
+
+void
+CTX_set_cipher_list( this, str )
+	SV *this;
+	char *str;
+PREINIT:
+	sc_ssl_ctx_t *ctx;
+PPCODE:
+	if( (ctx = mod_sc_ssl_ctx_from_class( this )) == NULL )
+		XSRETURN_EMPTY;
+	if( mod_sc_ssl_ctx_set_cipher_list( ctx, str ) != SC_OK )
+		XSRETURN_EMPTY;
+	XSRETURN_YES;
+
+
+#/*****************************************************************************
+# * CTX_check_private_key( this )
+# *****************************************************************************/
+
+void
+CTX_check_private_key( this )
+	SV *this;
+PREINIT:
+	sc_ssl_ctx_t *ctx;
+PPCODE:
+	if( (ctx = mod_sc_ssl_ctx_from_class( this )) == NULL )
+		XSRETURN_EMPTY;
+	if( mod_sc_ssl_ctx_check_private_key( ctx ) != SC_OK )
+		XSRETURN_EMPTY;
+	XSRETURN_YES;
+
+
+#/*****************************************************************************
+# * CTX_enable_compatibility( this )
+# *****************************************************************************/
+
+void
+CTX_enable_compatibility( this )
+	SV *this;
+PREINIT:
+	sc_ssl_ctx_t *ctx;
+PPCODE:
+	if( (ctx = mod_sc_ssl_ctx_from_class( this )) == NULL )
+		XSRETURN_EMPTY;
+	if( mod_sc_ssl_ctx_enable_compatibility( ctx ) != SC_OK )
 		XSRETURN_EMPTY;
 	XSRETURN_YES;
 

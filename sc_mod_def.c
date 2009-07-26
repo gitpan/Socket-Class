@@ -23,66 +23,96 @@ int mod_sc_create( char **args, int argc, sc_t **p_sc ) {
 	for( arge = args + argc; args < arge; ) {
 		key = *args ++;
 		val = *args ++;
-		if( my_stricmp( key, "domain" ) == 0 ||
-			my_stricmp( key, "family" ) == 0
-		) {
-			sc->s_domain = Socket_domainbyname( val );
-			if( sc->s_domain == AF_UNIX ) {
+		switch( *key ) {
+		case 'b':
+		case 'B':
+			if( my_stricmp( key, "blocking" ) == 0 ) {
+				bl = val != NULL && *val != '0';
+			}
+			else if( my_stricmp( key, "broadcast" ) == 0 ) {
+				bc = val != NULL && *val != '0';
+			}
+			break;
+		case 'd':
+		case 'D':
+			if( my_stricmp( key, "domain" ) == 0 ) {
+				sc->s_domain = Socket_domainbyname( val );
+				if( sc->s_domain == AF_UNIX ) {
+					sc->s_proto = 0;
+				}
+				else if( sc->s_domain == AF_BLUETOOTH ) {
+					sc->s_proto = BTPROTO_RFCOMM;
+				}
+			}
+			break;
+		case 'f':
+		case 'F':
+			if( my_stricmp( key, "family" ) == 0 ) {
+				sc->s_domain = Socket_domainbyname( val );
+				if( sc->s_domain == AF_UNIX ) {
+					sc->s_proto = 0;
+				}
+				else if( sc->s_domain == AF_BLUETOOTH ) {
+					sc->s_proto = BTPROTO_RFCOMM;
+				}
+			}
+			break;
+		case 't':
+		case 'T':
+			if( my_stricmp( key, "type" ) == 0 ) {
+				sc->s_type = Socket_typebyname( val );
+			}
+			else if( my_stricmp( key, "timeout" ) == 0 ) {
+				tmo = atof( val );
+			}
+			break;
+		case 'p':
+		case 'P':
+			if( my_stricmp( key, "proto" ) == 0 ) {
+				sc->s_proto = Socket_protobyname( val );
+				if( sc->s_proto == IPPROTO_UDP ) {
+					sc->s_type = SOCK_DGRAM;
+				}
+			}
+			break;
+		case 'l':
+		case 'L':
+			if( my_stricmp( key, "local_addr" ) == 0 ) {
+				la = val;
+				if( lp == NULL )
+					lp = "0";
+			}
+			else if( my_stricmp( key, "local_path" ) == 0 ) {
+				la = val;
+				sc->s_domain = AF_UNIX;
 				sc->s_proto = 0;
 			}
-			else if( sc->s_domain == AF_BLUETOOTH ) {
-				sc->s_proto = BTPROTO_RFCOMM;
+			else if( my_stricmp( key, "local_port" ) == 0 ) {
+				lp = val;
 			}
-		}
-		else if( my_stricmp( key, "type" ) == 0 ) {
-			sc->s_type = Socket_typebyname( val );
-		}
-		else if( my_stricmp( key, "proto" ) == 0 ) {
-			sc->s_proto = Socket_protobyname( val );
-			if( sc->s_proto == IPPROTO_UDP ) {
-				sc->s_type = SOCK_DGRAM;
+			else if( my_stricmp( key, "listen" ) == 0 ) {
+				ln = (int) atoi( val );
+				if( ln < 0 || ln > SOMAXCONN )
+					ln = SOMAXCONN;
 			}
-		}
-		else if( my_stricmp( key, "local_addr" ) == 0 ) {
-			la = val;
-			if( lp == NULL )
-				lp = "0";
-		}
-		else if( my_stricmp( key, "local_path" ) == 0 ) {
-			la = val;
-			sc->s_domain = AF_UNIX;
-			sc->s_proto = 0;
-		}
-		else if( my_stricmp( key, "local_port" ) == 0 ) {
-			lp = val;
-		}
-		else if( my_stricmp( key, "remote_addr" ) == 0 ) {
-			ra = val;
-		}
-		else if( my_stricmp( key, "remote_path" ) == 0 ) {
-			ra = val;
-			sc->s_domain = AF_UNIX;
-			sc->s_proto = 0;
-		}
-		else if( my_stricmp( key, "remote_port" ) == 0 ) {
-			rp = val;
-		}
-		else if( my_stricmp( key, "listen" ) == 0 ) {
-			ln = (int) atoi( val );
-			if( ln < 0 || ln > SOMAXCONN )
-				ln = SOMAXCONN;
-		}
-		else if( my_stricmp( key, "blocking" ) == 0 ) {
-			bl = val != NULL && *val != '0';
-		}
-		else if( my_stricmp( key, "broadcast" ) == 0 ) {
-			bc = val != NULL && *val != '0';
-		}
-		else if( my_stricmp( key, "reuseaddr" ) == 0 ) {
-			rua = val != NULL && *val != '0';
-		}
-		else if( my_stricmp( key, "timeout" ) == 0 ) {
-			tmo = atof( val );
+			break;
+		case 'r':
+		case 'R':
+			if( my_stricmp( key, "remote_addr" ) == 0 ) {
+				ra = val;
+			}
+			else if( my_stricmp( key, "remote_path" ) == 0 ) {
+				ra = val;
+				sc->s_domain = AF_UNIX;
+				sc->s_proto = 0;
+			}
+			else if( my_stricmp( key, "remote_port" ) == 0 ) {
+				rp = val;
+			}
+			else if( my_stricmp( key, "reuseaddr" ) == 0 ) {
+				rua = val != NULL && *val != '0';
+			}
+			break;
 		}
 	}
 	/* create the socket */
@@ -2192,6 +2222,7 @@ void mod_sc_set_errno( sc_t *sock, int code ) {
 }
 
 void mod_sc_set_error( sc_t *sock, int code, const char *fmt, ... ) {
+	int r;
 	va_list vl;
 	va_start( vl, fmt );
 	if( sock != NULL ) {
@@ -2200,7 +2231,8 @@ void mod_sc_set_error( sc_t *sock, int code, const char *fmt, ... ) {
 	}
 	else {
 		global.last_errno = code;
-		my_snprintf_( global.last_error, sizeof(global.last_error), fmt, vl );
+		r = my_snprintf_( global.last_error, sizeof(global.last_error), fmt, vl );
+		sv_setpvn( ERRSV, global.last_error, r );
 	}
 	va_end( vl );
 }

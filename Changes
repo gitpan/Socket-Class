@@ -1,5 +1,9 @@
 Revision history for Perl extension Socket::Class.
 
+version 2.25
+    - added support for shared context in SSL module
+    - global errors are stored in the $@ variable too
+
 version 2.24
     - added function read_packet()
     - updated readline() to support self defined line separators

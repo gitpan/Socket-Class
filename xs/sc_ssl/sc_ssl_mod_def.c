@@ -1,13 +1,14 @@
 #include "sc_ssl_mod_def.h"
 
-int mod_sc_ssl_create( char **args, int argc, sc_t **r_socket ) {
+sc_ssl_global_t global;
+
+int mod_sc_ssl_create( char **args, int argc, sc_t **p_socket ) {
 	sc_t *socket;
-	int r, i, argc2 = 0, listen = 0;
+	int r, i, argc2 = 0, listen = 0, is_client = -1;
 	char *key, *val, **args2, *ra = NULL, *rp = NULL, *la = NULL, *lp = NULL;
 	char *domain = NULL, *type = NULL, *proto = NULL;
-	char *pk = NULL, *crt = NULL, *cca = NULL;
-	char *caf = NULL, *cap = NULL, *ciphlist = NULL, *sslmethod = NULL;
 	userdata_t *ud;
+	sc_ssl_ctx_t *ctx, *use_ctx = NULL;
 	if( argc % 2 ) {
 		mod_sc->sc_set_errno( NULL, EINVAL );
 		return SC_ERROR;
@@ -17,68 +18,87 @@ int mod_sc_ssl_create( char **args, int argc, sc_t **r_socket ) {
 	for( i = 0; i < argc; ) {
 		key = args[i ++];
 		val = args[i ++];
-		if( my_stricmp( key, "local_addr" ) == 0 ) {
-			la = val;
+		switch( *key ) {
+		case 'd':
+		case 'D':
+			if( my_stricmp( key, "domain" ) == 0 ) {
+				domain = val;
+			}
+			else {
+				break;
+			}
+			continue;
+		case 'f':
+		case 'F':
+			if( my_stricmp( key, "family" ) == 0 ) {
+				domain = val;
+			}
+			else {
+				break;
+			}
+			continue;
+		case 'l':
+		case 'L':
+			if( my_stricmp( key, "local_addr" ) == 0 ) {
+				la = val;
+			}
+			else if( my_stricmp( key, "local_port" ) == 0 ) {
+				lp = val;
+			}
+			else if( my_stricmp( key, "local_path" ) == 0 ) {
+				la = val;
+				domain = "unix";
+				proto = "0";
+			}
+			else if( my_stricmp( key, "listen" ) == 0 ) {
+				listen = atoi( val );
+				is_client = FALSE;
+			}
+			else {
+				break;
+			}
+			continue;
+		case 'p':
+		case 'P':
+			if( my_stricmp( key, "proto" ) == 0 ) {
+				proto = val;
+			}
+			else {
+				break;
+			}
+			continue;
+		case 'r':
+		case 'R':
+			if( my_stricmp( key, "remote_addr" ) == 0 ) {
+				ra = val;
+				is_client = TRUE;
+			}
+			else if( my_stricmp( key, "remote_port" ) == 0 ) {
+				rp = val;
+				is_client = TRUE;
+			}
+			else if( my_stricmp( key, "remote_path" ) == 0 ) {
+				ra = val;
+				domain = "unix";
+				proto = "0";
+				is_client = TRUE;
+			}
+			else {
+				break;
+			}
+			continue;
+		case 't':
+		case 'T':
+			if( my_stricmp( key, "type" ) == 0 ) {
+				type = val;
+			}
+			else {
+				break;
+			}
+			continue;
 		}
-		else if( my_stricmp( key, "local_port" ) == 0 ) {
-			lp = val;
-		}
-		else if( my_stricmp( key, "local_path" ) == 0 ) {
-			la = val;
-			domain = "unix";
-			proto = "0";
-		}
-		else if( my_stricmp( key, "remote_addr" ) == 0 ) {
-			ra = val;
-		}
-		else if( my_stricmp( key, "remote_port" ) == 0 ) {
-			rp = val;
-		}
-		else if( my_stricmp( key, "remote_path" ) == 0 ) {
-			ra = val;
-			domain = "unix";
-			proto = "0";
-		}
-		else if( my_stricmp( key, "private_key" ) == 0 ) {
-			pk = val;
-		}
-		else if( my_stricmp( key, "certificate" ) == 0 ) {
-			crt = val;
-		}
-		else if( my_stricmp( key, "client_ca" ) == 0 ) {
-			cca = val;
-		}
-		else if( my_stricmp( key, "ca_file" ) == 0 ) {
-			caf = val;
-		}
-		else if( my_stricmp( key, "ca_path" ) == 0 ) {
-			cap = val;
-		}
-		else if( my_stricmp( key, "cipher_list" ) == 0 ) {
-			ciphlist = val;
-		}
-		else if( my_stricmp( key, "ssl_method" ) == 0 ) {
-			sslmethod = val;
-		}
-		else if(
-			my_stricmp( key, "domain" ) == 0 ||
-			my_stricmp( key, "family" ) == 0
-		) {
-			domain = val;
-		}
-		else if( my_stricmp( key, "proto" ) == 0 ) {
-			proto = val;
-		}
-		else if( my_stricmp( key, "type" ) == 0 ) {
-			type = val;
-		}
-		else if( my_stricmp( key, "listen" ) == 0 ) {
-			listen = atoi( val );
-		}
-		else {
-			args2[argc2 ++] = key;
-			args2[argc2 ++] = val;
-		}
+		args2[argc2 ++] = key;
+		args2[argc2 ++] = val;
 	}
 	if( domain != NULL ) {
 		args2[argc2 ++] = "domain";
@@ -98,39 +118,14 @@ int mod_sc_ssl_create( char **args, int argc, sc_t **r_socket ) {
 		return r;
 	Newxz( ud, 1, userdata_t );
 	mod_sc->sc_set_userdata( socket, ud, free_userdata );
-	if( sslmethod != NULL ) {
-		r = mod_sc_ssl_set_ssl_method( socket, sslmethod );
-		if( r != SC_OK )
-			goto error;
+	Newxz( ctx, 1, sc_ssl_ctx_t );
+	r = mod_sc_ssl_ctx_set_arg( ctx, args, argc, is_client, &use_ctx );
+	if( use_ctx != NULL ) {
+		Safefree( ctx );
+		ctx = use_ctx;
 	}
-	else {
-		ud->method_id = sslv23;
-	}
-	if( pk != NULL ) {
-		r = mod_sc_ssl_set_private_key( socket, pk );
-		if( r != SC_OK )
-			goto error;
-	}
-	if( crt != NULL ) {
-		r = mod_sc_ssl_set_certificate( socket, crt );
-		if( r != SC_OK )
-			goto error;
-	}
-	if( cca != NULL ) {
-		r = mod_sc_ssl_set_client_ca( socket, cca);
-		if( r != SC_OK )
-			goto error;
-	}
-	if( caf != NULL || cap != NULL ) {
-		r = mod_sc_ssl_set_verify_locations( socket, caf, cap );
-		if( r != SC_OK )
-			goto error;
-	}
-	if( ciphlist != NULL ) {
-		r = mod_sc_ssl_set_cipher_list( socket, ciphlist );
-		if( r != SC_OK )
-			goto error;
-	}
+	ud->sc_ssl_ctx = ctx;
+	ctx->refcnt++;
 	if( la != NULL || lp != NULL || listen ) {
 		r = mod_sc->sc_bind( socket, la, lp );
 		if( r != SC_OK )
@@ -146,7 +141,7 @@ int mod_sc_ssl_create( char **args, int argc, sc_t **r_socket ) {
 		if( r != SC_OK )
 			goto error;
 	}
-	*r_socket = socket;
+	(*p_socket) = socket;
 	return SC_OK;
 error:
 	mod_sc->sc_set_error( NULL,
@@ -176,7 +171,7 @@ int mod_sc_ssl_connect(
 	}
 	*/
 	/* get new SSL state with context */
-	ud->ssl = SSL_new( ud->ctx );
+	ud->ssl = SSL_new( ud->sc_ssl_ctx->ctx );
 	/* set connection to SSL state */
 	SSL_set_fd( ud->ssl, (int) mod_sc->sc_get_handle( socket ) );
 	/* start the handshaking */
@@ -190,6 +185,7 @@ int mod_sc_ssl_connect(
 			mod_sc->sc_set_error( socket, err, ERR_reason_error_string( err ) );
 		return SC_ERROR;
 	}
+	ud->sc_ssl_ctx->is_client = TRUE;
 	return SC_OK;
 }
 
@@ -200,7 +196,7 @@ int mod_sc_ssl_listen( sc_t *socket, int queue ) {
 	if( r != SC_OK )
 		return r;
 	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
-	if( ud->private_key == NULL ) {
+	if( ud->sc_ssl_ctx->private_key == NULL ) {
 		r = mod_sc_ssl_set_certificate( socket, SC_SSL_DEFAULT_CRT );
 		if( r != SC_OK )
 			return r;
@@ -213,6 +209,7 @@ int mod_sc_ssl_listen( sc_t *socket, int queue ) {
 	if( r != SC_OK )
 		return r;
 	*/
+	ud->sc_ssl_ctx->is_client = FALSE;
 	return mod_sc->sc_listen( socket, queue );
 }
 
@@ -231,7 +228,7 @@ int mod_sc_ssl_accept( sc_t *socket, sc_t **r_client ) {
 	Newxz( udc, 1, userdata_t );
 	mod_sc->sc_set_userdata( client, udc, free_userdata );
 	/* get new SSL state with context */
-	udc->ssl = SSL_new( ud->ctx );
+	udc->ssl = SSL_new( ud->sc_ssl_ctx->ctx );
 	/* set connection to SSL state */
 	SSL_set_fd( udc->ssl, (int) mod_sc->sc_get_handle( client ) );
 	/* start the handshaking */
@@ -661,101 +658,34 @@ void *mod_sc_ssl_get_userdata( sc_t *socket ) {
 	return ud->user_data;
 }
 
-int mod_sc_ssl_set_private_key( sc_t *socket, const char *s ) {
-	userdata_t *ud;
-	int r, l;
-	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
-	l = (int) strlen( s );
-	Renew( ud->private_key, l + 1, char );
-	Copy( s, ud->private_key, l + 1, char );
-	if( ud->ctx != NULL ) {
-		/* set the private key from KeyFile */
-#ifdef SC_DEBUG
-		_debug( "use private key from '%s'\n", ud->private_key );
-#endif
-		r = SSL_CTX_use_PrivateKey_file(
-			ud->ctx, ud->private_key, SSL_FILETYPE_PEM );
-		if( ! r )
-			goto error;
-	}
-	return SC_OK;
-error:
-	r = ERR_get_error();
-	mod_sc->sc_set_error( socket, r, ERR_reason_error_string( r ) );
-	return SC_ERROR;
+int mod_sc_ssl_set_private_key( sc_t *socket, const char *pk ) {
+	userdata_t *ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	sc_ssl_ctx_t *ctx = ud->sc_ssl_ctx;
+	ctx->socket = socket;
+	return mod_sc_ssl_ctx_set_private_key( ctx, pk );
 }
 
-int mod_sc_ssl_set_certificate( sc_t *socket, const char *s ) {
-	userdata_t *ud;
-	int r, l;
-	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
-	l = (int) strlen( s );
-	Renew( ud->certificate, l + 1, char );
-	Copy( s, ud->certificate, l + 1, char );
-	if( ud->ctx != NULL ) {
-		/* set the local certificate from CertFile */
-#ifdef SC_DEBUG
-		_debug( "use certificate from '%s'\n", ud->certificate );
-#endif
-		r = SSL_CTX_use_certificate_chain_file(
-			ud->ctx, ud->certificate );
-		if( ! r )
-			goto error;
-	}
-	return SC_OK;
-error:
-	r = ERR_get_error();
-	mod_sc->sc_set_error( socket, r, ERR_reason_error_string( r ) );
-	return SC_ERROR;
+int mod_sc_ssl_set_certificate( sc_t *socket, const char *crt ) {
+	userdata_t *ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	sc_ssl_ctx_t *ctx = ud->sc_ssl_ctx;
+	ctx->socket = socket;
+	return mod_sc_ssl_ctx_set_certificate( ctx, crt );
 }
 
-int mod_sc_ssl_set_client_ca( sc_t *socket, const char *s ) {
-	int l;
-	userdata_t *ud;
-	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
-	l = (int) strlen( s );
-	Renew( ud->client_ca, l + 1, char );
-	Copy( s, ud->client_ca, l + 1, char );
-	if( ud->ctx != NULL ) {
-		SSL_CTX_set_client_CA_list(
-			ud->ctx, SSL_load_client_CA_file( ud->client_ca ) );
-	}
-	return SC_OK;
+int mod_sc_ssl_set_client_ca( sc_t *socket, const char *str ) {
+	userdata_t *ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	sc_ssl_ctx_t *ctx = ud->sc_ssl_ctx;
+	ctx->socket = socket;
+	return mod_sc_ssl_ctx_set_client_ca( ctx, str );
 }
 
 int mod_sc_ssl_set_verify_locations(
 	sc_t *socket, const char *cafile, const char *capath
 ) {
 	userdata_t *ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
-	int r;
-	if( cafile != NULL ) {
-		r = (int) strlen( cafile );
-		Renew( ud->ca_file, r + 1, char );
-		Copy( cafile, ud->ca_file, r + 1, char );
-	}
-	else if( ud->ca_file != NULL ) {
-		Safefree( ud->ca_file );
-		ud->ca_file = NULL;
-	}
-	if( capath != NULL ) {
-		r = (int) strlen( capath );
-		Newx( ud->ca_path, r + 1, char );
-		Copy( capath, ud->ca_path, r + 1, char );
-	}
-	else if( ud->ca_path != NULL ) {
-		Safefree( ud->ca_path );
-		ud->ca_path = NULL;
-	}
-	if( ud->ctx != NULL ) {
-		r = SSL_CTX_load_verify_locations( ud->ctx, cafile, capath );
-		if( ! r )
-			goto error;
-	}
-	return SC_OK;
-error:
-	r = ERR_get_error();
-	mod_sc->sc_set_error( socket, r, ERR_reason_error_string( r ) );
-	return SC_ERROR;
+	sc_ssl_ctx_t *ctx = ud->sc_ssl_ctx;
+	ctx->socket = socket;
+	return mod_sc_ssl_ctx_set_verify_locations( ctx, cafile, capath );
 }
 
 int mod_sc_ssl_shutdown( sc_t *socket ) {
@@ -778,194 +708,42 @@ int mod_sc_ssl_shutdown( sc_t *socket ) {
 }
 
 int mod_sc_ssl_create_client_context( sc_t *socket ) {
-	userdata_t *ud;
-	int r;
-	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	userdata_t *ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	sc_ssl_ctx_t *ctx = ud->sc_ssl_ctx;
 	if( ud->ssl != NULL ) {
 		mod_sc->sc_close( socket );
 		SSL_free( ud->ssl );
 		ud->ssl = NULL;
 	}
-	SSL_METHOD *method;
-	switch( ud->method_id ) {
-	case sslv2:
-		method = SSLv2_client_method();
-		break;
-	default:
-	case sslv23:
-		method = SSLv23_client_method();
-		break;
-	case sslv3:
-		method = SSLv3_client_method();
-		break;
-	case tlsv1:
-		method = TLSv1_client_method();
-		break;
-	}
-	if( ud->method != method ) {
-		if( ud->ctx != NULL )
-			SSL_CTX_free( ud->ctx );
-		/* create ssl instance */
-		ud->method = method;
-		/* create context */
-		ud->ctx = SSL_CTX_new( ud->method );
-		/* load verify locations */
-		if( ud->ca_file != NULL || ud->ca_path != NULL ) {
-			r = SSL_CTX_load_verify_locations(
-				ud->ctx, ud->ca_file, ud->ca_path );
-			if( ! r )
-				goto error;
-		}
-		if( ud->certificate != NULL ) {
-			/* set the local certificate from CertFile */
-#ifdef SC_DEBUG
-			_debug( "use certificate from '%s'\n", ud->certificate );
-#endif
-			r = SSL_CTX_use_certificate_file(
-				ud->ctx, ud->certificate, SSL_FILETYPE_PEM );
-			if( ! r )
-				goto error;
-		}
-		if( ud->private_key != NULL ) {
-			/* set the private key from KeyFile */
-#ifdef SC_DEBUG
-			_debug( "use private key from '%s'\n", ud->private_key );
-#endif
-			r = SSL_CTX_use_PrivateKey_file(
-				ud->ctx, ud->private_key, SSL_FILETYPE_PEM );
-			if( ! r )
-				goto error;
-		}
-		/* set cipher list */
-		if( ud->cipher_list != NULL ) {
-#ifdef SC_DEBUG
-			_debug( "set cipher list '%s'\n", ud->cipher_list );
-#endif
-			if( !SSL_CTX_set_cipher_list( ud->ctx, ud->cipher_list ) )
-				goto error;
-		}
-		/* set auto retry */
-		SSL_CTX_set_mode( ud->ctx, SSL_MODE_AUTO_RETRY );
-	}
-	return SC_OK;
-error:
-	r = ERR_get_error();
-	mod_sc->sc_set_error( socket, r, ERR_reason_error_string( r ) );
-	return SC_ERROR;
+	ctx->socket = socket;
+	return mod_sc_ssl_ctx_init_client( ctx );
 }
 
 int mod_sc_ssl_create_server_context( sc_t *socket ) {
-	userdata_t *ud;
-	int r;
-	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	userdata_t *ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	sc_ssl_ctx_t *ctx = ud->sc_ssl_ctx;
 	if( ud->ssl != NULL ) {
 		mod_sc->sc_close( socket );
 		SSL_free( ud->ssl );
 		ud->ssl = NULL;
 	}
-	SSL_METHOD *method;
-	switch( ud->method_id ) {
-	case sslv2:
-		method = SSLv2_server_method();
-		break;
-	default:
-	case sslv23:
-		method = SSLv23_server_method();
-		break;
-	case sslv3:
-		method = SSLv3_server_method();
-		break;
-	case tlsv1:
-		method = TLSv1_server_method();
-		break;
-	}
-	if( ud->method != method ) {
-		if( ud->ctx != NULL )
-			SSL_CTX_free( ud->ctx );
-		/* create ssl instance */
-		ud->method = method;
-		/* create context */
-		ud->ctx = SSL_CTX_new( ud->method );
-		/* load verify locations */
-		if( ud->ca_file != NULL || ud->ca_path != NULL ) {
-			r = SSL_CTX_load_verify_locations(
-				ud->ctx, ud->ca_file, ud->ca_path );
-			if( ! r )
-				goto error;
-		}
-		if( ud->client_ca != NULL ) {
-			/* set the client ca */
-#ifdef SC_DEBUG
-			_debug( "use client ca from '%s'\n", ud->client_ca );
-#endif
-			SSL_CTX_set_client_CA_list(
-				ud->ctx, SSL_load_client_CA_file( ud->client_ca ) );
-		}
-		if( ud->certificate != NULL ) {
-			/* set the local certificate from CertFile */
-#ifdef SC_DEBUG
-			_debug( "use certificate from '%s'\n", ud->certificate );
-#endif
-			r = SSL_CTX_use_certificate_file(
-				ud->ctx, ud->certificate, SSL_FILETYPE_PEM );
-			if( ! r )
-				goto error;
-		}
-		if( ud->private_key != NULL ) {
-			/* set the private key from KeyFile */
-#ifdef SC_DEBUG
-			_debug( "use private key from '%s'\n", ud->private_key );
-#endif
-			r = SSL_CTX_use_PrivateKey_file(
-				ud->ctx, ud->private_key, SSL_FILETYPE_PEM );
-			if( ! r )
-				goto error;
-		}
-		/* set cipher list */
-		if( ud->cipher_list != NULL ) {
-#ifdef SC_DEBUG
-			_debug( "set cipher list '%s'\n", ud->cipher_list );
-#endif
-			if( !SSL_CTX_set_cipher_list( ud->ctx, ud->cipher_list ) )
-				goto error;
-		}
-		/* set auto retry */
-		SSL_CTX_set_mode( ud->ctx, SSL_MODE_AUTO_RETRY );
-	}
-	return SC_OK;
-error:
-	r = ERR_get_error();
-	mod_sc->sc_set_error( socket, r, ERR_reason_error_string( r ) );
-	return SC_ERROR;
+	ctx->socket = socket;
+	return mod_sc_ssl_ctx_init_server( ctx );
 }
 
+
 int mod_sc_ssl_check_private_key( sc_t *socket ) {
-	userdata_t *ud;
-	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
-	if( ud->ctx == NULL ) {
-		mod_sc->sc_set_error( socket, -9999, "Invalid context" );
-		return SC_ERROR;
-	}
-	/* verify private key */
-	if( ! SSL_CTX_check_private_key( ud->ctx ) ) {
-#ifdef SC_DEBUG
-		_debug( "!!! invalid private key !!!\n" );
-#endif
-		mod_sc->sc_set_error( socket, -9999, "Invalid private key" );
-		return SC_ERROR;
-	}
-	return SC_OK;
+	userdata_t *ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	sc_ssl_ctx_t *ctx = ud->sc_ssl_ctx;
+	ctx->socket = socket;
+	return mod_sc_ssl_ctx_check_private_key( ctx );
 }
 
 int mod_sc_ssl_enable_compatibility( sc_t *socket ) {
-	userdata_t *ud;
-	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
-	if( ud->ctx == NULL ) {
-		mod_sc->sc_set_error( socket, -9999, "Invalid context" );
-		return SC_ERROR;
-	}
-	SSL_CTX_set_options( ud->ctx, SSL_OP_ALL );
-	return SC_OK;
+	userdata_t *ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	sc_ssl_ctx_t *ctx = ud->sc_ssl_ctx;
+	ctx->socket = socket;
+	return mod_sc_ssl_ctx_enable_compatibility( ctx );
 }
 
 const char *mod_sc_ssl_get_cipher_name( sc_t *socket ) {
@@ -993,89 +771,26 @@ const char *mod_sc_ssl_get_version( sc_t *socket ) {
 }
 
 int mod_sc_ssl_starttls( sc_t *socket, char **args, int argc ) {
-	userdata_t *ud;
-	int r, i, client = TRUE, err;
-	char *key, *val, *pk = NULL, *crt = NULL, *cca = NULL, *caf = NULL;
-	char *cap = NULL, *ciphlist = NULL, *sslmethod = NULL;
-	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	int r, err;
+	userdata_t *ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	sc_ssl_ctx_t *ctx, *use_ctx = NULL;
 	if( ud == NULL ) {
 		Newxz( ud, 1, userdata_t );
 		mod_sc->sc_set_userdata( socket, ud, free_userdata );
+		Newxz( ud->sc_ssl_ctx, 1, sc_ssl_ctx_t );
 	}
-	if( argc % 2 ) {
-		mod_sc->sc_set_errno( socket, EINVAL );
-		return SC_ERROR;
-	}
-	for( i = 0; i < argc; ) {
-		key = args[i++];
-		val = args[i++];
-		if( my_stricmp( key, "server" ) == 0 ) {
-			client = *val == '\0' || *val == '0';
-		}
-		else if( my_stricmp( key, "private_key" ) == 0 ) {
-			pk = val;
-		}
-		else if( my_stricmp( key, "certificate" ) == 0 ) {
-			crt = val;
-		}
-		else if( my_stricmp( key, "client_ca" ) == 0 ) {
-			cca = val;
-		}
-		else if( my_stricmp( key, "ca_file" ) == 0 ) {
-			caf = val;
-		}
-		else if( my_stricmp( key, "ca_path" ) == 0 ) {
-			cap = val;
-		}
-		else if( my_stricmp( key, "cipher_list" ) == 0 ) {
-			ciphlist = val;
-		}
-		else if( my_stricmp( key, "ssl_method" ) == 0 ) {
-			sslmethod = val;
-		}
-	}
-	if( sslmethod != NULL ) {
-		r = mod_sc_ssl_set_ssl_method( socket, sslmethod );
-		if( r != SC_OK )
-			return SC_ERROR;
-	}
-	else {
-		ud->method_id = sslv23;
-	}
-	if( pk != NULL ) {
-		r = mod_sc_ssl_set_private_key( socket, pk );
-		if( r != SC_OK )
-			return r;
-	}
-	if( crt != NULL ) {
-		r = mod_sc_ssl_set_certificate( socket, crt );
-		if( r != SC_OK )
-			return r;
-	}
-	if( cca != NULL ) {
-		r = mod_sc_ssl_set_client_ca( socket, cca);
-		if( r != SC_OK )
-			return r;
-	}
-	if( caf != NULL || cap != NULL ) {
-		r = mod_sc_ssl_set_verify_locations( socket, caf, cap );
-		if( r != SC_OK )
-			return r;
-	}
-	if( ciphlist != NULL ) {
-		r = mod_sc_ssl_set_cipher_list( socket, ciphlist );
-		if( r != SC_OK )
-			return r;
-	}
-	if( client )
-		r = mod_sc_ssl_create_client_context( socket );
-	else
-		r = mod_sc_ssl_create_server_context( socket );
+	ctx = ud->sc_ssl_ctx;
+	r = mod_sc_ssl_ctx_set_arg( ctx, args, argc, TRUE, &use_ctx );
 	if( r != SC_OK )
 		return r;
-	ud->ssl = SSL_new( ud->ctx );
+	if( use_ctx != NULL ) {
+		Safefree( ctx );
+		ud->sc_ssl_ctx = ctx = use_ctx;
+	}
+	ctx->refcnt++;
+	ud->ssl = SSL_new( ctx->ctx );
 	SSL_set_fd( ud->ssl, (int) mod_sc->sc_get_handle( socket ) );
-	if( client ) {
+	if( ctx->is_client ) {
 		SSL_set_connect_state( ud->ssl );
 	}
 	else {
@@ -1094,72 +809,561 @@ int mod_sc_ssl_starttls( sc_t *socket, char **args, int argc ) {
 	return SC_OK;
 }
 
-int mod_sc_ssl_set_ssl_method( sc_t *socket, const char *s ) {
-	userdata_t *ud;
-	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
-#ifdef SC_DEBUG
-	_debug( "set ssl method '%s'\n", s );
+int mod_sc_ssl_set_ssl_method( sc_t *socket, const char *name ) {
+	userdata_t *ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	sc_ssl_ctx_t *ctx = ud->sc_ssl_ctx;
+	ctx->socket = socket;
+	return mod_sc_ssl_ctx_set_ssl_method( ctx, name );
+}
+
+int mod_sc_ssl_set_cipher_list( sc_t *socket, const char *str ) {
+	userdata_t *ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
+	sc_ssl_ctx_t *ctx = ud->sc_ssl_ctx;
+	ctx->socket = socket;
+	return mod_sc_ssl_ctx_set_cipher_list( ctx, str );
+}
+
+/* ssl context */
+
+int mod_sc_ssl_ctx_create( char **args, int argc, sc_ssl_ctx_t **p_ctx ) {
+	int r;
+	sc_ssl_ctx_t *ctx;
+	Newxz( ctx, 1, sc_ssl_ctx_t );
+	r = mod_sc_ssl_ctx_set_arg( ctx, args, argc, TRUE, NULL );
+	if( r != SC_OK ) {
+		Safefree( ctx );
+		return r;
+	}
+	ctx->refcnt = 1;
+#ifdef USE_ITHREADS
+	MUTEX_LOCK( &global.thread_lock );
 #endif
-	if( *s == '\0' ) {
-		ud->method_id = sslv23;
+	ctx->id = ++global.counter;
+	ctx->next = global.ctx;
+	global.ctx = ctx;
+#ifdef USE_ITHREADS
+	MUTEX_UNLOCK( &global.thread_lock );
+#endif
+	(*p_ctx) = ctx;
+	return SC_OK;
+}
+
+int mod_sc_ssl_ctx_destroy( sc_ssl_ctx_t *ctx ) {
+#ifdef SC_DEBUG
+	_debug( "destroy ctx %d, refcnt %d\n", ctx->id, ctx->refcnt );
+#endif
+	if( --ctx->refcnt > 0 )
+		return SC_OK;
+	if( remove_context( ctx ) == SC_OK ) {
+		free_context( ctx );
+		return SC_OK;
 	}
-	else if( my_stricmp( s, "TLSV1" ) == 0 ) {
-		ud->method_id = tlsv1;
+	mod_sc->sc_set_error( NULL, -9999, "Invalid context" );
+	return SC_ERROR;
+}
+
+int mod_sc_ssl_ctx_create_class( sc_ssl_ctx_t *ctx, SV **psv ) {
+	HV *hv;
+	SV *sv;
+	hv = gv_stashpvn( "Socket::Class::SSL::CTX", 23, FALSE );
+	if( hv == NULL ) {
+		mod_sc->sc_set_error(
+			NULL, -9999, "Invalid package Socket::Class::SSL::CTX" );
+		return SC_ERROR;
 	}
-	else if( my_stricmp( s, "SSLV3" ) == 0 ) {
-		ud->method_id = sslv3;
+	sv = sv_2mortal( (SV *) newSViv( (IV) ctx->id ) );
+#ifdef SC_DEBUG
+	_debug( "bless ctx %d with Socket::Class::SSL::CTX\n", ctx->id );
+#endif
+	*psv = sv_bless( newRV( sv ), hv );
+	return SC_OK;
+}
+
+sc_ssl_ctx_t *mod_sc_ssl_ctx_from_class( SV *sv ) {
+	int id;
+	sc_ssl_ctx_t *ctx;
+	if( !SvROK( sv ) )
+		return NULL;
+	sv = SvRV( sv );
+	if( !SvIOK( sv ) )
+		return NULL;
+	id = (int) SvIV( sv );
+#ifdef USE_ITHREADS
+	MUTEX_LOCK( &global.thread_lock );
+#endif
+	for( ctx = global.ctx; ctx != NULL; ctx = ctx->next ) {
+		if( ctx->id == id )
+			break;
 	}
-	else if( my_stricmp( s, "SSLV23" ) == 0 ) {
-		ud->method_id = sslv23;
+#ifdef USE_ITHREADS
+	MUTEX_UNLOCK( &global.thread_lock );
+#endif
+	return ctx;
+}
+
+int mod_sc_ssl_ctx_set_arg(
+	sc_ssl_ctx_t *ctx, char **args, int argc, int is_client,
+	sc_ssl_ctx_t **p_ctx
+) {
+	int r, i;
+	char *key, *val, *pk = NULL, *crt = NULL, *cca = NULL, *caf = NULL;
+	char *cap = NULL, *ciphlist = NULL, *sslmethod = NULL;
+	sc_ssl_ctx_t *usectx = NULL;
+	if( argc % 2 ) {
+		mod_sc->sc_set_errno( ctx->socket, EINVAL );
+		return SC_ERROR;
 	}
-	else if( my_stricmp( s, "SSLV2" ) == 0 ) {
-		ud->method_id = sslv2;
+	for( i = 0; i < argc; ) {
+		key = args[i++];
+		val = args[i++];
+		switch( *key ) {
+		case 'c':
+		case 'C':
+			if( my_stricmp( key, "certificate" ) == 0 ) {
+				crt = val;
+			}
+			else if( my_stricmp( key, "cipher_list" ) == 0 ) {
+				ciphlist = val;
+			}
+			else if( my_stricmp( key, "client_ca" ) == 0 ) {
+				cca = val;
+			}
+			else if( my_stricmp( key, "ca_file" ) == 0 ) {
+				caf = val;
+			}
+			else if( my_stricmp( key, "ca_path" ) == 0 ) {
+				cap = val;
+			}
+			break;
+		case 'p':
+		case 'P':
+			if( my_stricmp( key, "private_key" ) == 0 ) {
+				pk = val;
+			}
+			break;
+		case 's':
+		case 'S':
+			if( my_stricmp( key, "server" ) == 0 ) {
+				is_client = *val == '\0' || *val == '0';
+			}
+			else if( my_stricmp( key, "ssl_method" ) == 0 ) {
+				sslmethod = val;
+			}
+			break;
+		case 'u':
+		case 'U':
+			if( my_stricmp( key, "use_ctx" ) == 0 ) {
+				usectx = (sc_ssl_ctx_t *) val;
+			}
+			break;
+		}
+	}
+	if( usectx != NULL && usectx->ctx != NULL && p_ctx != NULL ) {
+#ifdef SC_DEBUG
+		_debug( "use ctx %d\n", usectx->id );
+#endif
+		(*p_ctx) = usectx;
+		return SC_OK;
+	}
+	ctx->is_client = is_client;
+	r = mod_sc_ssl_ctx_set_ssl_method( ctx, sslmethod );
+	if( r != SC_OK )
+		return SC_ERROR;
+	if( is_client >= 0 ) {
+		if( is_client )
+			r = mod_sc_ssl_ctx_init_client( ctx );
+		else
+			r = mod_sc_ssl_ctx_init_server( ctx );
+		if( r != SC_OK )
+			return r;
+	}
+	if( crt != NULL ) {
+		r = mod_sc_ssl_ctx_set_certificate( ctx, crt );
+		if( r != SC_OK )
+			return r;
+	}
+	if( pk != NULL ) {
+		r = mod_sc_ssl_ctx_set_private_key( ctx, pk );
+		if( r != SC_OK )
+			return r;
+	}
+	if( cca != NULL ) {
+		r = mod_sc_ssl_ctx_set_client_ca( ctx, cca );
+		if( r != SC_OK )
+			return r;
+	}
+	if( caf != NULL || cap != NULL ) {
+		r = mod_sc_ssl_ctx_set_verify_locations( ctx, caf, cap );
+		if( r != SC_OK )
+			return r;
+	}
+	if( ciphlist != NULL ) {
+		r = mod_sc_ssl_ctx_set_cipher_list( ctx, ciphlist );
+		if( r != SC_OK )
+			return r;
+	}
+	return SC_OK;
+}
+
+int mod_sc_ssl_ctx_set_ssl_method( sc_ssl_ctx_t *ctx, const char *name ) {
+#ifdef SC_DEBUG
+	_debug( "set ssl method '%s'\n", name );
+#endif
+	if( name == NULL || *name == '\0' ) {
+		ctx->method_id = sslv23;
+	}
+	else if( my_stricmp( name, "TLSV1" ) == 0 ) {
+		ctx->method_id = tlsv1;
+	}
+	else if( my_stricmp( name, "SSLV3" ) == 0 ) {
+		ctx->method_id = sslv3;
+	}
+	else if( my_stricmp( name, "SSLV23" ) == 0 ) {
+		ctx->method_id = sslv23;
+	}
+	else if( my_stricmp( name, "SSLV2" ) == 0 ) {
+		ctx->method_id = sslv2;
 	}
 	else {
-		mod_sc->sc_set_error( socket, -1, "invalid ssl method: %s", s );
+		mod_sc->sc_set_error( ctx->socket, -1, "invalid ssl method: %s", name );
 		return SC_ERROR;
 	}
 	return SC_OK;
 }
 
-int mod_sc_ssl_set_cipher_list( sc_t *socket, const char *s ) {
-	int l;
-	userdata_t *ud;
-	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
-	l = (int) strlen( s );
-	Renew( ud->cipher_list, l + 1, char );
-	Copy( s, ud->cipher_list, l + 1, char );
-	if( ud->ctx != NULL ) {
+int mod_sc_ssl_ctx_set_private_key( sc_ssl_ctx_t *ctx, const char *pk ) {
+	int r, l = (int) strlen( pk );
+	Renew( ctx->private_key, l + 1, char );
+	Copy( pk, ctx->private_key, l + 1, char );
+	if( ctx->ctx != NULL ) {
+		/* set the private key from KeyFile */
 #ifdef SC_DEBUG
-		_debug( "set cipher list '%s'\n", ud->cipher_list );
+		_debug( "use private key from '%s'\n", ctx->private_key );
 #endif
-		if( !SSL_CTX_set_cipher_list( ud->ctx, ud->cipher_list ) ) {
-			int r = ERR_get_error();
-			mod_sc->sc_set_error( socket, r, ERR_reason_error_string( r ) );
+		r = SSL_CTX_use_PrivateKey_file(
+			ctx->ctx, ctx->private_key, SSL_FILETYPE_PEM );
+		if( ! r ) {
+			r = ERR_get_error();
+			mod_sc->sc_set_error(
+				ctx->socket, r, ERR_reason_error_string( r ) );
 			return SC_ERROR;
 		}
 	}
 	return SC_OK;
 }
 
+int mod_sc_ssl_ctx_set_certificate( sc_ssl_ctx_t *ctx, const char *crt ) {
+	int r, l = (int) strlen( crt );
+	Renew( ctx->certificate, l + 1, char );
+	Copy( crt, ctx->certificate, l + 1, char );
+	if( ctx->ctx != NULL ) {
+		/* set the local certificate from CertFile */
+#ifdef SC_DEBUG
+		_debug( "use certificate from '%s'\n", ctx->certificate );
+#endif
+		r = SSL_CTX_use_certificate_chain_file(
+			ctx->ctx, ctx->certificate );
+		if( ! r ) {
+			r = ERR_get_error();
+			mod_sc->sc_set_error(
+				ctx->socket, r, ERR_reason_error_string( r ) );
+			return SC_ERROR;
+		}
+	}
+	return SC_OK;
+}
+
+int mod_sc_ssl_ctx_set_client_ca( sc_ssl_ctx_t *ctx, const char *str ) {
+	int l = (int) strlen( str );
+	Renew( ctx->client_ca, l + 1, char );
+	Copy( str, ctx->client_ca, l + 1, char );
+	if( ctx->ctx != NULL ) {
+		SSL_CTX_set_client_CA_list(
+			ctx->ctx, SSL_load_client_CA_file( ctx->client_ca ) );
+	}
+	return SC_OK;
+}
+
+int mod_sc_ssl_ctx_set_verify_locations(
+	sc_ssl_ctx_t *ctx, const char *cafile, const char *capath
+) {
+	int r;
+	if( cafile != NULL ) {
+		r = (int) strlen( cafile );
+		Renew( ctx->ca_file, r + 1, char );
+		Copy( cafile, ctx->ca_file, r + 1, char );
+	}
+	else if( ctx->ca_file != NULL ) {
+		Safefree( ctx->ca_file );
+		ctx->ca_file = NULL;
+	}
+	if( capath != NULL ) {
+		r = (int) strlen( capath );
+		Newx( ctx->ca_path, r + 1, char );
+		Copy( capath, ctx->ca_path, r + 1, char );
+	}
+	else if( ctx->ca_path != NULL ) {
+		Safefree( ctx->ca_path );
+		ctx->ca_path = NULL;
+	}
+	if( ctx->ctx != NULL ) {
+		r = SSL_CTX_load_verify_locations( ctx->ctx, cafile, capath );
+		if( ! r ) {
+			r = ERR_get_error();
+			mod_sc->sc_set_error(
+				ctx->socket, r, ERR_reason_error_string( r ) );
+			return SC_ERROR;
+		}
+	}
+	return SC_OK;
+}
+
+int mod_sc_ssl_ctx_set_cipher_list( sc_ssl_ctx_t *ctx, const char *str ) {
+	int l = (int) strlen( str ), r;
+	Renew( ctx->cipher_list, l + 1, char );
+	Copy( str, ctx->cipher_list, l + 1, char );
+	if( ctx->ctx != NULL ) {
+#ifdef SC_DEBUG
+		_debug( "set cipher list '%s'\n", ctx->cipher_list );
+#endif
+		if( !SSL_CTX_set_cipher_list( ctx->ctx, ctx->cipher_list ) ) {
+			r = ERR_get_error();
+			mod_sc->sc_set_error(
+				ctx->socket, r, ERR_reason_error_string( r ) );
+			return SC_ERROR;
+		}
+	}
+	return SC_OK;
+}
+
+int mod_sc_ssl_ctx_check_private_key( sc_ssl_ctx_t *ctx ) {
+	if( ctx->ctx == NULL ) {
+		mod_sc->sc_set_error( ctx->socket, -9999, "Invalid context" );
+		return SC_ERROR;
+	}
+	/* verify private key */
+	if( !SSL_CTX_check_private_key( ctx->ctx ) ) {
+#ifdef SC_DEBUG
+		_debug( "!!! invalid private key !!!\n" );
+#endif
+		mod_sc->sc_set_error( ctx->socket, -9999, "Invalid private key" );
+		return SC_ERROR;
+	}
+	return SC_OK;
+}
+
+int mod_sc_ssl_ctx_enable_compatibility( sc_ssl_ctx_t *ctx ) {
+	if( ctx->ctx == NULL ) {
+		mod_sc->sc_set_error( ctx->socket, -9999, "Invalid context" );
+		return SC_ERROR;
+	}
+	SSL_CTX_set_options( ctx->ctx, SSL_OP_ALL );
+	return SC_OK;
+}
+
+int mod_sc_ssl_ctx_init_client( sc_ssl_ctx_t *ctx ) {
+	int r;
+	SSL_METHOD *method;
+	switch( ctx->method_id ) {
+	case sslv2:
+		method = SSLv2_client_method();
+		break;
+	default:
+	case sslv23:
+		method = SSLv23_client_method();
+		break;
+	case sslv3:
+		method = SSLv3_client_method();
+		break;
+	case tlsv1:
+		method = TLSv1_client_method();
+		break;
+	}
+	if( ctx->method != method ) {
+		if( ctx->ctx != NULL )
+			SSL_CTX_free( ctx->ctx );
+		/* create ssl instance */
+		ctx->method = method;
+		/* create context */
+		ctx->ctx = SSL_CTX_new( ctx->method );
+		/* load verify locations */
+		if( ctx->ca_file != NULL || ctx->ca_path != NULL ) {
+			r = SSL_CTX_load_verify_locations(
+				ctx->ctx, ctx->ca_file, ctx->ca_path );
+			if( ! r )
+				goto error;
+		}
+		if( ctx->certificate != NULL ) {
+			/* set the local certificate from CertFile */
+#ifdef SC_DEBUG
+			_debug( "use certificate from '%s'\n", ctx->certificate );
+#endif
+			r = SSL_CTX_use_certificate_file(
+				ctx->ctx, ctx->certificate, SSL_FILETYPE_PEM );
+			if( ! r )
+				goto error;
+		}
+		if( ctx->private_key != NULL ) {
+			/* set the private key from KeyFile */
+#ifdef SC_DEBUG
+			_debug( "use private key from '%s'\n", ctx->private_key );
+#endif
+			r = SSL_CTX_use_PrivateKey_file(
+				ctx->ctx, ctx->private_key, SSL_FILETYPE_PEM );
+			if( ! r )
+				goto error;
+		}
+		/* set cipher list */
+		if( ctx->cipher_list != NULL ) {
+#ifdef SC_DEBUG
+			_debug( "set cipher list '%s'\n", ctx->cipher_list );
+#endif
+			if( !SSL_CTX_set_cipher_list( ctx->ctx, ctx->cipher_list ) )
+				goto error;
+		}
+		/* set auto retry */
+		SSL_CTX_set_mode( ctx->ctx, SSL_MODE_AUTO_RETRY );
+	}
+	return SC_OK;
+error:
+	r = ERR_get_error();
+	mod_sc->sc_set_error( ctx->socket, r, ERR_reason_error_string( r ) );
+	return SC_ERROR;
+}
+
+int mod_sc_ssl_ctx_init_server( sc_ssl_ctx_t *ctx ) {
+	int r;
+	SSL_METHOD *method;
+	switch( ctx->method_id ) {
+	case sslv2:
+		method = SSLv2_server_method();
+		break;
+	default:
+	case sslv23:
+		method = SSLv23_server_method();
+		break;
+	case sslv3:
+		method = SSLv3_server_method();
+		break;
+	case tlsv1:
+		method = TLSv1_server_method();
+		break;
+	}
+	if( ctx->method != method ) {
+		if( ctx->ctx != NULL )
+			SSL_CTX_free( ctx->ctx );
+		/* create ssl instance */
+		ctx->method = method;
+		/* create context */
+		ctx->ctx = SSL_CTX_new( ctx->method );
+		/* load verify locations */
+		if( ctx->ca_file != NULL || ctx->ca_path != NULL ) {
+			r = SSL_CTX_load_verify_locations(
+				ctx->ctx, ctx->ca_file, ctx->ca_path );
+			if( ! r )
+				goto error;
+		}
+		if( ctx->client_ca != NULL ) {
+			/* set the client ca */
+#ifdef SC_DEBUG
+			_debug( "use client ca from '%s'\n", ctx->client_ca );
+#endif
+			SSL_CTX_set_client_CA_list(
+				ctx->ctx, SSL_load_client_CA_file( ctx->client_ca ) );
+		}
+		if( ctx->certificate != NULL ) {
+			/* set the local certificate from CertFile */
+#ifdef SC_DEBUG
+			_debug( "use certificate from '%s'\n", ctx->certificate );
+#endif
+			r = SSL_CTX_use_certificate_file(
+				ctx->ctx, ctx->certificate, SSL_FILETYPE_PEM );
+			if( ! r )
+				goto error;
+		}
+		if( ctx->private_key != NULL ) {
+			/* set the private key from KeyFile */
+#ifdef SC_DEBUG
+			_debug( "use private key from '%s'\n", ctx->private_key );
+#endif
+			r = SSL_CTX_use_PrivateKey_file(
+				ctx->ctx, ctx->private_key, SSL_FILETYPE_PEM );
+			if( ! r )
+				goto error;
+		}
+		/* set cipher list */
+		if( ctx->cipher_list != NULL ) {
+#ifdef SC_DEBUG
+			_debug( "set cipher list '%s'\n", ctx->cipher_list );
+#endif
+			if( !SSL_CTX_set_cipher_list( ctx->ctx, ctx->cipher_list ) )
+				goto error;
+		}
+		/* set auto retry */
+		SSL_CTX_set_mode( ctx->ctx, SSL_MODE_AUTO_RETRY );
+	}
+	return SC_OK;
+error:
+	r = ERR_get_error();
+	mod_sc->sc_set_error( ctx->socket, r, ERR_reason_error_string( r ) );
+	return SC_ERROR;
+}
+
+/* internal functions */
+
+void free_context( sc_ssl_ctx_t *ctx ) {
+	if( ctx->ctx != NULL )
+		SSL_CTX_free( ctx->ctx );
+	Safefree( ctx->private_key );
+	Safefree( ctx->certificate );
+	Safefree( ctx->client_ca );
+	Safefree( ctx->ca_file );
+	Safefree( ctx->ca_path );
+	Safefree( ctx );
+}
+
+int remove_context( sc_ssl_ctx_t *ctx ) {
+	sc_ssl_ctx_t *cp = NULL, *cc;
+#ifdef USE_ITHREADS
+	MUTEX_LOCK( &global.thread_lock );
+#endif
+	cc = global.ctx;
+	while( cc != NULL ) {
+		if( cc == ctx ) {
+			if( cp == NULL )
+				global.ctx = cc->next;
+			else
+				cp->next = cc->next;
+			ctx = NULL;
+			break;
+		}
+		cp = cc;
+		cc = cc->next;
+	}
+#ifdef USE_ITHREADS
+	MUTEX_UNLOCK( &global.thread_lock );
+#endif
+	if( ctx == NULL )
+		return SC_OK;
+	return SC_ERROR;
+}
+
 void free_userdata( void *p ) {
 	userdata_t *ud = (userdata_t *) p;
+	sc_ssl_ctx_t *ctx = ud->sc_ssl_ctx;
 	if( ud->user_data != NULL && ud->free_user_data != NULL )
 		ud->free_user_data( ud->user_data );
 #ifdef SC_DEBUG
 	_debug( "free userdata\n" );
 #endif
-	if( ud->ctx != NULL )
-		SSL_CTX_free( ud->ctx );
 	if( ud->ssl != NULL )
 		SSL_free( ud->ssl );
 	Safefree( ud->rcvbuf );
 	Safefree( ud->buffer );
-	Safefree( ud->private_key );
-	Safefree( ud->certificate );
-	Safefree( ud->client_ca );
-	Safefree( ud->ca_file );
-	Safefree( ud->ca_path );
+	if( --ctx->refcnt <= 0 ) {
+		remove_context( ctx );
+		free_context( ctx );
+	}
 	Safefree( ud );
 }
 

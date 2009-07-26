@@ -3,6 +3,7 @@ install_files.PL
 mod_sc.h
 Changes
 Class.pm
+Class.pod
 Class.xs
 Makefile.PL
 MANIFEST
@@ -32,6 +33,7 @@ t/3_unix.t
 t/4_threads.t
 xs/Makefile.PL
 xs/sc_const/Const.pm
+xs/sc_const/Const.pod
 xs/sc_const/Const.xs
 xs/sc_const/Makefile.PL
 
@@ -41,6 +43,7 @@ xs/sc_ssl/mod_sc_ssl.inc.h
 xs/sc_ssl/sc_ssl_mod_def.c
 xs/sc_ssl/sc_ssl_mod_def.h
 xs/sc_ssl/SSL.pm
+xs/sc_ssl/SSL.pod
 xs/sc_ssl/SSL.xs
 xs/sc_ssl/lib32/bufferoverflowu.lib
 xs/sc_ssl/lib64/bufferoverflowu.lib

@@ -396,9 +396,11 @@ extern sc_global_t global;
 		global.last_errno = code; \
 		if( str != NULL ) { \
 			my_strncpy( global.last_error, str, sizeof(global.last_error) ); \
+			sv_setpvn( ERRSV, str, strlen( str ) ); \
 		} \
 		else { \
 			global.last_error[0] = '\0'; \
+			sv_setpvn( ERRSV, "", 0 ); \
 		} \
 	} while( 0 )
 
@@ -410,9 +412,11 @@ extern sc_global_t global;
 				global.last_error, sizeof( global.last_error ), \
 				global.last_errno \
 			); \
+			sv_setpvn( ERRSV, global.last_error, strlen( global.last_error ) ); \
 		} \
 		else { \
 			global.last_error[0] = '\0'; \
+			sv_setpvn( ERRSV, "", 0 ); \
 		} \
 	} while( 0 )
 

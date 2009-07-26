@@ -119,28 +119,49 @@ enum ssl_method {
 	tlsv1
 };
 
-typedef struct st_userdata {
-	enum ssl_method				method_id;
-	SSL_METHOD					*method;
-	SSL_CTX						*ctx;
+typedef struct st_userdata			userdata_t;
+typedef struct st_sc_ssl_global		sc_ssl_global_t;
+
+struct st_userdata {
+	sc_ssl_ctx_t				*sc_ssl_ctx;
 	SSL							*ssl;
 	char						*rcvbuf;
 	int							rcvbuf_len;
 	int							rcvbuf_pos;
 	char						*buffer;
 	int							buffer_len;
+	void						*user_data;
+	void						(*free_user_data) ( void *p );
+};
+
+
+struct st_sc_ssl_ctx {
+	sc_ssl_ctx_t				*next;
+	int							id;
+	int							refcnt;
+	int							is_client;
+	enum ssl_method				method_id;
+	SSL_METHOD					*method;
+	SSL_CTX						*ctx;
+	sc_t						*socket;
 	char						*private_key;
 	char						*certificate;
 	char						*client_ca;
 	char						*ca_file;
 	char						*ca_path;
 	char						*cipher_list;
-	void						*user_data;
-	void						(*free_user_data) ( void *p );
-} userdata_t;
+};
 
+struct st_sc_ssl_global {
+	sc_ssl_ctx_t				*ctx;
+	int							counter;
+#ifdef USE_ITHREADS
+	perl_mutex					thread_lock;
+#endif
+};
 
 extern mod_sc_t *mod_sc;
+extern sc_ssl_global_t global;
 
 int mod_sc_ssl_create( char **args, int argc, sc_t **r_socket );
 int mod_sc_ssl_connect(
@@ -190,6 +211,34 @@ int mod_sc_ssl_starttls( sc_t *socket, char **args, int argc );
 int mod_sc_ssl_set_ssl_method( sc_t *socket, const char *s );
 int mod_sc_ssl_set_cipher_list( sc_t *socket, const char *s );
 
+/* ssl context */
+
+int mod_sc_ssl_ctx_create( char **args, int argc, sc_ssl_ctx_t **p_ctx );
+int mod_sc_ssl_ctx_destroy( sc_ssl_ctx_t *ctx );
+int mod_sc_ssl_ctx_create_class( sc_ssl_ctx_t *ctx, SV **psv );
+sc_ssl_ctx_t *mod_sc_ssl_ctx_from_class( SV *sv );
+int mod_sc_ssl_ctx_set_ssl_method( sc_ssl_ctx_t *ctx, const char *name );
+int mod_sc_ssl_ctx_set_private_key( sc_ssl_ctx_t *ctx, const char *pk );
+int mod_sc_ssl_ctx_set_certificate( sc_ssl_ctx_t *ctx, const char *crt );
+int mod_sc_ssl_ctx_set_client_ca( sc_ssl_ctx_t *ctx, const char *str );
+int mod_sc_ssl_ctx_set_verify_locations(
+	sc_ssl_ctx_t *ctx, const char *cafile, const char *capath
+);
+int mod_sc_ssl_ctx_set_cipher_list( sc_ssl_ctx_t *ctx, const char *str );
+int mod_sc_ssl_ctx_check_private_key( sc_ssl_ctx_t *ctx );
+int mod_sc_ssl_ctx_enable_compatibility( sc_ssl_ctx_t *ctx );
+
+int mod_sc_ssl_ctx_set_arg(
+	sc_ssl_ctx_t *ctx, char **args, int argc, int is_client,
+	sc_ssl_ctx_t **p_ctx
+);
+int mod_sc_ssl_ctx_init_client( sc_ssl_ctx_t *ctx );
+int mod_sc_ssl_ctx_init_server( sc_ssl_ctx_t *ctx );
+
+/* internal functions */
+
+int remove_context( sc_ssl_ctx_t *ctx );
+void free_context( sc_ssl_ctx_t *ctx );
 void free_userdata( void *p );
 const char *my_ssl_error( int code );
 
