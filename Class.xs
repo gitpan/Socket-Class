@@ -10,6 +10,9 @@ MODULE = Socket::Class		PACKAGE = Socket::Class
 BOOT:
 {
 	HV *stash;
+#ifdef SC_DEBUG
+	_debug( "INIT called\n" );
+#endif
 #if SC_DEBUG > 1
 	debug_init();
 #endif
@@ -21,11 +24,9 @@ BOOT:
 			Perl_croak( aTHX_ "Error at WSAStartup()" );
 	}
 #endif
-	memset( global.first_socket, 0, sizeof( global.first_socket ) );
-	memset( global.last_socket, 0, sizeof( global.last_socket ) );
-	global.destroyed = 0;
+	Zero( &sc_global, 1, sc_global_t );
 #ifdef USE_ITHREADS
-	MUTEX_INIT( &global.thread_lock );
+	MUTEX_INIT( &sc_global.thread_lock );
 #endif
 	stash = gv_stashpvn( __PACKAGE__, (I32) sizeof(__PACKAGE__), FALSE );
 #ifdef SC_OLDNET
@@ -65,26 +66,26 @@ PREINIT:
 	socket_class_t *sc1, *sc2;
 	u_long cascade;
 CODE:
-	if( items ) {} /* avoid compiler warning */
-	if( global.destroyed )
+	(void) items; /* avoid compiler warning */
+	if( sc_global.destroyed )
 		return;
-	global.destroyed = 1;
+	sc_global.destroyed = 1;
 #ifdef SC_DEBUG
 	_debug( "END called\n" );
 #endif
 	GLOBAL_LOCK();
 	for( cascade = 0; cascade < SC_CASCADE; cascade ++ ) {
-		sc1 = global.first_socket[cascade];
+		sc1 = sc_global.socket[cascade];
 		while( sc1 != NULL ) {
 			sc2 = sc1->next;
 			socket_class_free( sc1 );
 			sc1 = sc2;
 		}
-		global.first_socket[cascade] = global.last_socket[cascade] = NULL;
+		sc_global.socket[cascade] = NULL;
 	}
 	GLOBAL_UNLOCK();
 #ifdef USE_ITHREADS
-	MUTEX_DESTROY( &global.thread_lock );
+	MUTEX_DESTROY( &sc_global.thread_lock );
 #endif
 #ifdef _WIN32
 	WSACleanup();
@@ -108,7 +109,7 @@ PREINIT:
 PPCODE:
 	GLOBAL_LOCK();
 	for( i = 0; i < SC_CASCADE; i ++ ) {
-		for( sc = global.first_socket[i]; sc != NULL; sc = sc->next ) {
+		for( sc = sc_global.socket[i]; sc != NULL; sc = sc->next ) {
 			if( sc->do_clone )
 				sc->refcnt ++;
 #ifdef SC_DEBUG
@@ -509,7 +510,8 @@ PREINIT:
 PPCODE:
 	if( (sc = mod_sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
-	msg = SvPV( buf, l1 );
+	_debug( "ok\n" );
+	msg = SvPVx( buf, l1 );
 	max = len = (int) l1;
 	if( items > 2 ) {
 		start = (int) SvIV( ST(2) );

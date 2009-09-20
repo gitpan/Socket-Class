@@ -308,8 +308,9 @@ typedef struct st_sockaddr_l2	SOCKADDR_L2CAP;
 typedef struct st_sc_sockaddr	my_sockaddr_t;
 
 typedef struct st_socket_class {
-	struct st_socket_class		*prev, *next;
-	unsigned long				id;
+	struct st_socket_class		*next;
+	int							id;
+	int							refcnt;
 	SOCKET						sock;
 	int							s_domain;
 	int							s_type;
@@ -322,7 +323,6 @@ typedef struct st_socket_class {
 	struct timeval				timeout;
 	char						*classname;
 	size_t						classname_len;
-	int							refcnt;
 #ifdef USE_ITHREADS
 	unsigned long				thread_id;
 	int							do_clone;
@@ -336,23 +336,22 @@ typedef struct st_socket_class {
 #define SC_CASCADE				31
 
 typedef struct st_sc_global {
-	socket_class_t				*first_socket[SC_CASCADE];
-	socket_class_t				*last_socket[SC_CASCADE];
+	socket_class_t				*socket[SC_CASCADE];
 	long						last_errno;
 	char						last_error[256];
 	int							destroyed;
-	unsigned long				counter;
+	int							counter;
 #ifdef USE_ITHREADS
 	perl_mutex					thread_lock;
 #endif
 } sc_global_t;
 
-extern sc_global_t global;
+extern sc_global_t sc_global;
 
 #ifdef USE_ITHREADS
 
-#define GLOBAL_LOCK()			MUTEX_LOCK( &global.thread_lock )
-#define GLOBAL_UNLOCK()			MUTEX_UNLOCK( &global.thread_lock )
+#define GLOBAL_LOCK()			MUTEX_LOCK( &sc_global.thread_lock )
+#define GLOBAL_UNLOCK()			MUTEX_UNLOCK( &sc_global.thread_lock )
 
 #else
 
@@ -393,29 +392,29 @@ extern sc_global_t global;
 
 #define GLOBAL_ERROR(code,str) \
 	do { \
-		global.last_errno = code; \
+		sc_global.last_errno = code; \
 		if( str != NULL ) { \
-			my_strncpy( global.last_error, str, sizeof(global.last_error) ); \
+			my_strncpy( sc_global.last_error, str, sizeof(sc_global.last_error) ); \
 			sv_setpvn( ERRSV, str, strlen( str ) ); \
 		} \
 		else { \
-			global.last_error[0] = '\0'; \
+			sc_global.last_error[0] = '\0'; \
 			sv_setpvn( ERRSV, "", 0 ); \
 		} \
 	} while( 0 )
 
 #define GLOBAL_ERRNO(code) \
 	do { \
-		global.last_errno = code; \
+		sc_global.last_errno = code; \
 		if( code > 0 ) { \
 			Socket_error( \
-				global.last_error, sizeof( global.last_error ), \
-				global.last_errno \
+				sc_global.last_error, sizeof( sc_global.last_error ), \
+				sc_global.last_errno \
 			); \
-			sv_setpvn( ERRSV, global.last_error, strlen( global.last_error ) ); \
+			sv_setpvn( ERRSV, sc_global.last_error, strlen( sc_global.last_error ) ); \
 		} \
 		else { \
-			global.last_error[0] = '\0'; \
+			sc_global.last_error[0] = '\0'; \
 			sv_setpvn( ERRSV, "", 0 ); \
 		} \
 	} while( 0 )

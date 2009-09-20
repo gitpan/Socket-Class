@@ -8,6 +8,9 @@ MODULE = Socket::Class::SSL	PACKAGE = Socket::Class::SSL	PREFIX = SSL_
 BOOT:
 {
 	SV **psv;
+#ifdef SC_DEBUG
+	_debug( "INIT called\n" );
+#endif
 #if SC_DEBUG > 1
 	debug_init();
 #endif
@@ -75,9 +78,9 @@ BOOT:
 	SSL_library_init();
 	SSL_load_error_strings();
 	OpenSSL_add_all_algorithms();
-	Zero( &global, 1, sc_ssl_global_t );
+	Zero( &sc_ssl_global, 1, sc_ssl_global_t );
 #ifdef USE_ITHREADS
-	MUTEX_INIT( &global.thread_lock );
+	MUTEX_INIT( &sc_ssl_global.thread_lock );
 #endif
 }
 
@@ -99,12 +102,14 @@ void
 SSL_END( ... )
 CODE:
 	(void) items; /* avoid compiler warning */
+	if( sc_ssl_global.destroyed )
+		return;
+	sc_ssl_global.destroyed = TRUE;
 #ifdef SC_DEBUG
 	_debug( "END called\n" );
 #endif
 #ifdef USE_ITHREADS
-	MUTEX_DESTROY( &global.thread_lock );
-	global.destroyed = TRUE;
+	MUTEX_DESTROY( &sc_ssl_global.thread_lock );
 #endif
 #if SC_DEBUG > 1
 	debug_free();
@@ -119,9 +124,22 @@ CODE:
 
 void
 SSL_CLONE( ... )
+PREINIT:
+	sc_ssl_ctx_t *ctx;
+	int i;
 PPCODE:
-	/* prevent double calls in super module */
 	(void) items; /* avoid compiler warning */
+	MUTEX_LOCK( &sc_ssl_global.thread_lock );
+	for( i = 0; i < SC_SSL_CTX_CASCADE; i ++ ) {
+		for( ctx = sc_ssl_global.ctx[i]; ctx != NULL; ctx = ctx->next ) {
+			/*if( !ctx->dont_clone )*/
+				ctx->refcnt ++;
+#ifdef SC_DEBUG
+			_debug( "CLONE called for ctx %d, refcnt: %d\n", ctx->id, ctx->refcnt );
+#endif
+		}
+	}
+	MUTEX_UNLOCK( &sc_ssl_global.thread_lock );
 
 #endif
 
@@ -137,15 +155,27 @@ PREINIT:
 	sc_t *socket;
 	int r, i, argc = 0;
 	SV *sv;
-	char **args;
+	char **args, *key, *val;
 PPCODE:
 	Newx( args, items - 1, char * );
 	/* read options */
 	for( i = 1; i < items - 1; ) {
-		args[argc ++] = SvPV_nolen( ST(i) );
-		i ++;
-		args[argc ++] = SvPV_nolen( ST(i) );
-		i ++;
+		key = SvPV_nolen( ST(i) );
+		i++;
+		switch( *key ) {
+		case 'u':
+		case 'U':
+			if( my_stricmp( key, "use_ctx" ) == 0 ) {
+				val = (char *) mod_sc_ssl_ctx_from_class( ST(i) );
+				goto got_val;
+			}
+			break;
+		}
+		val = SvPV_nolen( ST(i) );
+got_val:
+		i++;
+		args[argc++] = key;
+		args[argc++] = val;
 	}
 	r = mod_sc_ssl_create( args, argc, &socket );
 	Safefree( args );
@@ -940,6 +970,16 @@ PREINIT:
 PPCODE:
 	if( (ctx = mod_sc_ssl_ctx_from_class( this )) == NULL )
 		XSRETURN_EMPTY;
+	/*
+#ifdef USE_ITHREADS
+	if( !ctx->dont_clone && ctx->thread_id == THREAD_ID() ) {
+		ctx->dont_clone = TRUE;
+#ifdef SC_DEBUG
+		_debug( "disable futher CLONE for ctx %d\n", ctx->id );
+#endif
+	}
+#endif
+	*/
 	mod_sc_ssl_ctx_destroy( ctx );
 
 

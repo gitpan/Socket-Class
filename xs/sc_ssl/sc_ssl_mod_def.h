@@ -112,6 +112,14 @@ void debug_free();
 #define AF_INET6				23
 #endif
 
+#ifdef USE_ITHREADS
+#ifdef _WIN32
+#define THREAD_ID()		(unsigned long) GetCurrentThreadId()
+#else
+#define THREAD_ID()		(unsigned long) pthread_self()
+#endif
+#endif /* USE_ITHREADS */
+
 enum ssl_method {
 	sslv2,
 	sslv23,
@@ -141,6 +149,12 @@ struct st_sc_ssl_ctx {
 	int							refcnt;
 	int							is_client;
 	enum ssl_method				method_id;
+	/*
+#ifdef USE_ITHREADS
+	int							dont_clone;
+	unsigned long				thread_id;
+#endif
+	*/
 	SSL_METHOD					*method;
 	SSL_CTX						*ctx;
 	sc_t						*socket;
@@ -152,17 +166,19 @@ struct st_sc_ssl_ctx {
 	char						*cipher_list;
 };
 
+#define SC_SSL_CTX_CASCADE		31
+
 struct st_sc_ssl_global {
-	sc_ssl_ctx_t				*ctx;
+	sc_ssl_ctx_t				*ctx[SC_SSL_CTX_CASCADE];
 	int							counter;
-#ifdef USE_ITHREADS
 	int							destroyed;
+#ifdef USE_ITHREADS
 	perl_mutex					thread_lock;
 #endif
 };
 
 extern mod_sc_t *mod_sc;
-extern sc_ssl_global_t global;
+extern sc_ssl_global_t sc_ssl_global;
 
 int mod_sc_ssl_create( char **args, int argc, sc_t **r_socket );
 int mod_sc_ssl_connect(

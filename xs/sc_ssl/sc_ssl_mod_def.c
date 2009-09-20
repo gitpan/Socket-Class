@@ -1,6 +1,6 @@
 #include "sc_ssl_mod_def.h"
 
-sc_ssl_global_t global;
+sc_ssl_global_t sc_ssl_global;
 
 int mod_sc_ssl_create( char **args, int argc, sc_t **p_socket ) {
 	sc_t *socket;
@@ -118,14 +118,14 @@ int mod_sc_ssl_create( char **args, int argc, sc_t **p_socket ) {
 		return r;
 	Newxz( ud, 1, userdata_t );
 	mod_sc->sc_set_userdata( socket, ud, free_userdata );
-	Newxz( ctx, 1, sc_ssl_ctx_t );
+	mod_sc_ssl_ctx_create( NULL, 0, &ctx );
 	r = mod_sc_ssl_ctx_set_arg( ctx, args, argc, is_client, &use_ctx );
 	if( use_ctx != NULL ) {
-		Safefree( ctx );
+		mod_sc_ssl_ctx_destroy( ctx );
+		use_ctx->refcnt++;
 		ctx = use_ctx;
 	}
 	ud->sc_ssl_ctx = ctx;
-	ctx->refcnt++;
 	if( la != NULL || lp != NULL || listen ) {
 		r = mod_sc->sc_bind( socket, la, lp );
 		if( r != SC_OK )
@@ -275,7 +275,7 @@ int mod_sc_ssl_recv( sc_t *socket, char *buf, int len, int flags, int *p_len ) {
 				Move( ud->rcvbuf + len2, ud->rcvbuf, ud->rcvbuf_pos, char );
 		}
 		len -= len2;
-		if( len == 0 || ! SSL_pending( ud->ssl ) ) {
+		if( len == 0 || !SSL_pending( ud->ssl ) ) {
 			*p_len = len2;
 			return SC_OK;
 		}
@@ -383,29 +383,29 @@ int mod_sc_ssl_write( sc_t *socket, const char *buf, int len, int *p_len ) {
 
 int mod_sc_ssl_readline( sc_t *socket, char **p_buf, int *p_len ) {
 	userdata_t *ud;
-	int r, l;
-	size_t i, pos = 0, len = 256;
+	int r, l, i, pos = 0, len = 1024;
 	char *p, ch;
 	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
 	p = ud->buffer;
-	while( 1 ) {
-		if( ud->buffer_len < (int) (pos + len) ) {
-			ud->buffer_len = (int) (pos + len);
+	while( TRUE ) {
+		if( ud->buffer_len < (pos + len) ) {
+			ud->buffer_len = (pos + len);
 			Renew( ud->buffer, ud->buffer_len, char );
 			p = ud->buffer + pos;
 		}
-		r = mod_sc_ssl_recv( socket, p, (int) len, MSG_PEEK, &l );
+		r = mod_sc_ssl_recv( socket, p, len, MSG_PEEK, &l );
 		if( r != SC_OK ) {
 			if( pos > 0 )
 				break;
 			return SC_ERROR;
 		}
 		if( l == 0 ) {
+			/* line not complete */
 			*p_buf = ud->buffer;
-			*p_len = (int) pos;
+			*p_len = pos;
 			return SC_OK;
 		}
-		for( i = 0; i < (size_t) l; i ++, p ++ ) {
+		for( i = 0; i < l; i ++, p ++ ) {
 			if( *p != '\n' && *p != '\r' && *p != '\0' )
 				continue;
 			/* found newline */
@@ -415,13 +415,13 @@ int mod_sc_ssl_readline( sc_t *socket, char **p_buf, int *p_len ) {
 			ch = *p;
 			*p = '\0';
 			*p_buf = ud->buffer;
-			*p_len = (int) (pos + i);
+			*p_len = pos + i;
 			if( ch == '\r' || ch == '\n' ) {
 				if( i < (size_t) l ) {
 					if( p[1] == (ch == '\r' ? '\n' : '\r') )
 						i ++;
 				}
-				else if( l == (int) len ) {
+				else if( l == len ) {
 					r = mod_sc_ssl_recv( socket, p, 1, MSG_PEEK, &l );
 					if( r == SC_OK && l == 1 &&
 						*p == (ch == '\r' ? '\n' : '\r')
@@ -430,17 +430,22 @@ int mod_sc_ssl_readline( sc_t *socket, char **p_buf, int *p_len ) {
 					}
 				}
 			}
-			mod_sc_ssl_recv( socket, ud->buffer + pos, (int) i + 1, 0, &l );
+			mod_sc_ssl_recv( socket, ud->buffer + pos, i + 1, 0, &l );
 			return SC_OK;
 		}
-		mod_sc_ssl_recv( socket, ud->buffer + pos, (int) i, 0, &l );
+		mod_sc_ssl_recv( socket, ud->buffer + pos, i, 0, &l );
 		pos += i;
-		if( r < (int) len )
+		if( i < len ) {
+			/* line not complete.
+			 * next recv could block infinitely.
+			 * stop here?
+			 */
 			break;
+		}
 	}
 	ud->buffer[pos] = '\0';
-	*p_buf = ud->buffer;
-	*p_len = (int) pos;
+	(*p_buf) = ud->buffer;
+	(*p_len) = pos;
 	return SC_OK;
 }
 
@@ -449,7 +454,7 @@ int mod_sc_ssl_read_packet(
 ) {
 	userdata_t *ud;
 	int r, l;
-	size_t i, pos = 0, len = 256, seplen;
+	size_t i, pos = 0, len = 1024, seplen;
 	char *p, *sep;
 	for( sep = separator, seplen = 0; *sep != '\0'; sep++, seplen++ );
 	if( seplen == 0 ) {
@@ -461,7 +466,7 @@ int mod_sc_ssl_read_packet(
 		max = (size_t) -1;
 	ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
 	p = ud->buffer;
-	while( 1 ) {
+	while( TRUE ) {
 		if( ud->buffer_len < (int) (pos + len) ) {
 			ud->buffer_len = (int) (pos + len);
 			Renew( ud->buffer, ud->buffer_len, char );
@@ -474,6 +479,7 @@ int mod_sc_ssl_read_packet(
 			return SC_ERROR;
 		}
 		if( l == 0 ) {
+			/* packet not complete */
 			*p_buf = ud->buffer;
 			*p_len = (int) pos;
 			return SC_OK;
@@ -510,8 +516,13 @@ int mod_sc_ssl_read_packet(
 		}
 		mod_sc_ssl_recv( socket, ud->buffer + pos, (int) i, 0, &l );
 		pos += i;
-		if( r < (int) len )
+		if( i < len ) {
+			/* packet not complete.
+			 * next recv could block infinitely.
+			 * stop here?
+			 */
 			break;
+		}
 	}
 	ud->buffer[pos] = '\0';
 	*p_buf = ud->buffer;
@@ -774,23 +785,26 @@ const char *mod_sc_ssl_get_version( sc_t *socket ) {
 }
 
 int mod_sc_ssl_starttls( sc_t *socket, char **args, int argc ) {
-	int r, err;
+	int r, err, blocking;
 	userdata_t *ud = (userdata_t *) mod_sc->sc_get_userdata( socket );
 	sc_ssl_ctx_t *ctx, *use_ctx = NULL;
 	if( ud == NULL ) {
 		Newxz( ud, 1, userdata_t );
 		mod_sc->sc_set_userdata( socket, ud, free_userdata );
-		Newxz( ud->sc_ssl_ctx, 1, sc_ssl_ctx_t );
+		mod_sc_ssl_ctx_create( NULL, 0, &ud->sc_ssl_ctx );
 	}
+	mod_sc->sc_get_blocking( socket, &blocking );
+	if( !blocking )
+		mod_sc->sc_set_blocking( socket, 1 );
 	ctx = ud->sc_ssl_ctx;
 	r = mod_sc_ssl_ctx_set_arg( ctx, args, argc, TRUE, &use_ctx );
 	if( r != SC_OK )
-		return r;
+		goto exit;
 	if( use_ctx != NULL ) {
-		Safefree( ctx );
+		mod_sc_ssl_ctx_destroy( ctx );
+		use_ctx->refcnt++;
 		ud->sc_ssl_ctx = ctx = use_ctx;
 	}
-	ctx->refcnt++;
 	ud->ssl = SSL_new( ctx->ctx );
 	SSL_set_fd( ud->ssl, (int) mod_sc->sc_get_handle( socket ) );
 	if( ctx->is_client ) {
@@ -803,13 +817,20 @@ int mod_sc_ssl_starttls( sc_t *socket, char **args, int argc ) {
 			r = SSL_get_error( ud->ssl, r );
 			if( (err = ERR_get_error()) == 0 ) {
 				mod_sc->sc_set_error( socket, r, my_ssl_error( r ) );
-				return SC_ERROR;
 			}
-			mod_sc->sc_set_error( socket, err, ERR_reason_error_string( err ) );
-			return SC_ERROR;
+			else {
+				mod_sc->sc_set_error(
+					socket, err, ERR_reason_error_string( err ) );
+			}
+			r = SC_ERROR;
+			goto exit;
 		}
 	}
-	return SC_OK;
+	r = SC_OK;
+exit:
+	if( !blocking )
+		mod_sc->sc_set_blocking( socket, 0 );
+	return r;
 }
 
 int mod_sc_ssl_set_ssl_method( sc_t *socket, const char *name ) {
@@ -832,20 +853,26 @@ int mod_sc_ssl_ctx_create( char **args, int argc, sc_ssl_ctx_t **p_ctx ) {
 	int r;
 	sc_ssl_ctx_t *ctx;
 	Newxz( ctx, 1, sc_ssl_ctx_t );
-	r = mod_sc_ssl_ctx_set_arg( ctx, args, argc, TRUE, NULL );
-	if( r != SC_OK ) {
-		Safefree( ctx );
-		return r;
+	if( argc > 0 ) {
+		r = mod_sc_ssl_ctx_set_arg( ctx, args, argc, TRUE, NULL );
+		if( r != SC_OK ) {
+			Safefree( ctx );
+			return r;
+		}
 	}
 	ctx->refcnt = 1;
 #ifdef USE_ITHREADS
-	MUTEX_LOCK( &global.thread_lock );
+	MUTEX_LOCK( &sc_ssl_global.thread_lock );
 #endif
-	ctx->id = ++global.counter;
-	ctx->next = global.ctx;
-	global.ctx = ctx;
+	ctx->id = ++sc_ssl_global.counter;
+	r = ctx->id % SC_SSL_CTX_CASCADE;
+	ctx->next = sc_ssl_global.ctx[r];
+	sc_ssl_global.ctx[r] = ctx;
 #ifdef USE_ITHREADS
-	MUTEX_UNLOCK( &global.thread_lock );
+	MUTEX_UNLOCK( &sc_ssl_global.thread_lock );
+#endif
+#ifdef SC_DEBUG
+	_debug( "created ctx %d, refcnt %d\n", ctx->id, ctx->refcnt );
 #endif
 	(*p_ctx) = ctx;
 	return SC_OK;
@@ -868,6 +895,10 @@ int mod_sc_ssl_ctx_destroy( sc_ssl_ctx_t *ctx ) {
 int mod_sc_ssl_ctx_create_class( sc_ssl_ctx_t *ctx, SV **psv ) {
 	HV *hv;
 	SV *sv;
+	/*
+	if( !ctx->thread_id )
+		ctx->thread_id = THREAD_ID();
+	*/
 	hv = gv_stashpvn( "Socket::Class::SSL::CTX", 23, FALSE );
 	if( hv == NULL ) {
 		mod_sc->sc_set_error(
@@ -883,7 +914,7 @@ int mod_sc_ssl_ctx_create_class( sc_ssl_ctx_t *ctx, SV **psv ) {
 }
 
 sc_ssl_ctx_t *mod_sc_ssl_ctx_from_class( SV *sv ) {
-	int id;
+	int id, i;
 	sc_ssl_ctx_t *ctx;
 	if( !SvROK( sv ) )
 		return NULL;
@@ -892,14 +923,22 @@ sc_ssl_ctx_t *mod_sc_ssl_ctx_from_class( SV *sv ) {
 		return NULL;
 	id = (int) SvIV( sv );
 #ifdef USE_ITHREADS
-	MUTEX_LOCK( &global.thread_lock );
+	if( !sc_ssl_global.destroyed )
+		MUTEX_LOCK( &sc_ssl_global.thread_lock );
 #endif
-	for( ctx = global.ctx; ctx != NULL; ctx = ctx->next ) {
-		if( ctx->id == id )
-			break;
+	for( i = 0; i < SC_SSL_CTX_CASCADE; i++ ) {
+		for( ctx = sc_ssl_global.ctx[i]; ctx != NULL; ctx = ctx->next ) {
+			if( ctx->id == id )
+				goto found;
+		}
 	}
+#ifdef SC_DEBUG
+	_debug( "ctx %d NOT found\n", id );
+#endif
+found:
 #ifdef USE_ITHREADS
-	MUTEX_UNLOCK( &global.thread_lock );
+	if( !sc_ssl_global.destroyed )
+		MUTEX_UNLOCK( &sc_ssl_global.thread_lock );
 #endif
 	return ctx;
 }
@@ -1327,15 +1366,17 @@ void free_context( sc_ssl_ctx_t *ctx ) {
 
 int remove_context( sc_ssl_ctx_t *ctx ) {
 	sc_ssl_ctx_t *cp = NULL, *cc;
+	int i;
 #ifdef USE_ITHREADS
-	if( !global.destroyed )
-		MUTEX_LOCK( &global.thread_lock );
+	if( !sc_ssl_global.destroyed )
+		MUTEX_LOCK( &sc_ssl_global.thread_lock );
 #endif
-	cc = global.ctx;
+	i = ctx->id % SC_SSL_CTX_CASCADE;
+	cc = sc_ssl_global.ctx[i];
 	while( cc != NULL ) {
 		if( cc == ctx ) {
 			if( cp == NULL )
-				global.ctx = cc->next;
+				sc_ssl_global.ctx[i] = cc->next;
 			else
 				cp->next = cc->next;
 			ctx = NULL;
@@ -1345,8 +1386,8 @@ int remove_context( sc_ssl_ctx_t *ctx ) {
 		cc = cc->next;
 	}
 #ifdef USE_ITHREADS
-	if( !global.destroyed )
-		MUTEX_UNLOCK( &global.thread_lock );
+	if( !sc_ssl_global.destroyed )
+		MUTEX_UNLOCK( &sc_ssl_global.thread_lock );
 #endif
 	if( ctx == NULL )
 		return SC_OK;
@@ -1365,10 +1406,7 @@ void free_userdata( void *p ) {
 		SSL_free( ud->ssl );
 	Safefree( ud->rcvbuf );
 	Safefree( ud->buffer );
-	if( ctx != NULL && --ctx->refcnt <= 0 ) {
-		remove_context( ctx );
-		free_context( ctx );
-	}
+	mod_sc_ssl_ctx_destroy( ctx );
 	Safefree( ud );
 }
 

@@ -336,7 +336,7 @@ B<Parameters>
 I<$how>
 
 One of the following values that specifies the operation that will no longer
-be allowed. Default is $SD_SEND.
+be allowed. Default is I<SD_SEND>.
 
 =for formatter none
 
@@ -643,10 +643,10 @@ The value of I<$flags> can be any combination of the following:
 
   Number  Constant         Description
   ----------------------------------------------------------------------
-  0x1     MSG_OOB          Process OOB (out-of-band) data  
-  0x2     MSG_PEEK         Peek at incoming message  
-  0x4     MSG_DONTROUTE    Bypass routing, use direct interface  
-  0x8     MSG_CTRUNC       Data completes record
+  0x01    MSG_OOB          Process OOB (out-of-band) data  
+  0x02    MSG_PEEK         Peek at incoming message  
+  0x04    MSG_DONTROUTE    Bypass routing, use direct interface  
+  0x08    MSG_CTRUNC       Data completes record
   0x20    MSG_TRUNC        Return the real length of the packet, even
                            when it was longer than the passed buffer.
                            Only valid for packet sockets. 
@@ -676,7 +676,8 @@ A buffer containing the data that will be sent to the remote host.
 
 I<$to>
 
-Packed address of the remote host. (See pack_addr function)
+Packed address of the remote host.
+(See L<pack_addr|Socket::Class/pack_addr> function)
 
 I<$flags>
 
@@ -686,9 +687,9 @@ The value of I<$flags> can be any combination of the following:
 
   Number  Constant         Description
   -------------------------------------------------------------
-  0x1     MSG_OOB          Process OOB (out-of-band) data  
-  0x2     MSG_PEEK         Peek at incoming message  
-  0x4     MSG_DONTROUTE    Bypass routing, use direct interface  
+  0x01    MSG_OOB          Process OOB (out-of-band) data  
+  0x02    MSG_PEEK         Peek at incoming message  
+  0x04    MSG_DONTROUTE    Bypass routing, use direct interface  
 
 =for formatter perl
 
@@ -743,10 +744,10 @@ I<$flags> parameter. Use the OR logic operator (|) to use more than one flag.
 
   Number  Constant         Description
   -----------------------------------------------------------------------
-  0x1     MSG_OOB          Process OOB (out-of-band) data  
-  0x2     MSG_PEEK         Receive data from the beginning of the receive
+  0x001   MSG_OOB          Process OOB (out-of-band) data  
+  0x002   MSG_PEEK         Receive data from the beginning of the receive
                            queue without removing it from the queue.
-  0x40    MSG_DONTWAIT     With this flag set, the function returns even
+  0x040   MSG_DONTWAIT     With this flag set, the function returns even
                            if it would normally have blocked. 
   0x100   MSG_WAITALL      Block until at least len are received. However,
                            if a signal is caught or the remote host
@@ -766,7 +767,7 @@ B<Examples>
 I<Blocking mode (default)>
 
   while( $paddr = $sock->recvfrom( $buf, 1024 ) ) {
-      ( $r_addr, $r_port ) = $sock->unpack_addr( $paddr );
+      ($r_addr, $r_port) = $sock->unpack_addr( $paddr );
       print "Incoming message from $r_addr port $r_port\n";
   }
 
@@ -783,7 +784,7 @@ I<Non blocking mode>
           $sock->wait( 10 );
           next;
       }
-      ( $r_addr, $r_port ) = $sock->unpack_addr( $paddr );
+      ($r_addr, $r_port) = $sock->unpack_addr( $paddr );
       print "Incoming message from $r_addr port $r_port\n";
   }
 
@@ -841,7 +842,7 @@ B<Examples>
   # send the data out
   $start = 0;
   $size = length( $data );
-  while( ! $sock->is_error && $start < $size ) {
+  while( !$sock->is_error && $start < $size ) {
       if( $sock->is_writable( 100 ) ) {
           $start += $sock->write( $data, $start );
       }
@@ -871,7 +872,7 @@ B<Examples>
 
   # read from socket until error
   $data = '';
-  while( ! $sock->is_error ) {
+  while( !$sock->is_error ) {
       if( $sock->is_readable( 100 ) ) {
           $sock->read( $buffer, 4096 )
               or last;
@@ -1551,11 +1552,18 @@ I<getaddrinfo()> as global function
       or die Socket::Class->error;
 
 
-I<getaddrinfo()> within an object
+I<getaddrinfo()> with an object
 
   $sock = Socket::Class->new();
   @list = $sock->getaddrinfo( 'localhost' )
       or die $sock->error;
+
+
+I<getaddrinfo()> exported
+
+  use Socket::Class qw/getaddrinfo/;
+  
+  @list = getaddrinfo( 'localhost' ) or die $@;
 
 
 =item B<getnameinfo ( $addr [, $service [, $flags]] )>
@@ -1603,11 +1611,19 @@ I<getnameinfo()> as global function
   print "host: $host, service: $service\n";
 
 
-I<getnameinfo()> within an object
+I<getnameinfo()> with an object
 
   $sock = Socket::Class->new();
   ($host, $service) = $sock->getnameinfo( '127.0.0.1', 80 )
       or die $sock->error;
+  print "host: $host, service: $service\n";
+
+
+I<getnameinfo()> exported
+
+  use Socket::Class qw/getnameinfo/;
+  
+  ($host, $service) = getnameinfo( '127.0.0.1', 80 ) or die $@;
   print "host: $host, service: $service\n";
 
 
@@ -1777,7 +1793,7 @@ OOB data is available for reading (only if SO_OOBINLINE is disabled).
 
 B<Examples>
 
-  use Socket::Class qw($SOL_SOCKET $SO_ERROR);
+  use Socket::Class qw(SOL_SOCKET SO_ERROR);
   
   ...
   
@@ -1788,7 +1804,7 @@ B<Examples>
   }
   if( $e ) {
       # socket error
-      $e = $sock->get_option( $SOL_SOCKET, $SO_ERROR );
+      $e = $sock->get_option( SOL_SOCKET, SO_ERROR );
       die $sock->error( $e );
   }
   if( $r ) {

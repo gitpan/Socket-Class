@@ -1,27 +1,22 @@
 #include "socket_class.h"
 
-sc_global_t global;
+sc_global_t sc_global;
 
 INLINE void socket_class_add( socket_class_t *sc ) {
-	size_t cascade;
+	int cascade;
 	GLOBAL_LOCK();
-	sc->id = ++ global.counter;
+	sc->id = ++sc_global.counter;
 	sc->refcnt = 1;
 #ifdef USE_ITHREADS
 	sc->thread_id = THREAD_ID();
 	sc->do_clone = TRUE;
 #endif
-	cascade = (size_t) sc->id % SC_CASCADE;
+	cascade = sc->id % SC_CASCADE;
 #ifdef SC_DEBUG
 	_debug( "add sc %lu cascade %lu\n", sc->id, cascade );
 #endif
-	if( global.first_socket[cascade] == NULL )
-		global.first_socket[cascade] = sc;
-	else {
-		global.last_socket[cascade]->next = sc;
-		sc->prev = global.last_socket[cascade];
-	}
-	global.last_socket[cascade] = sc;
+	sc->next = sc_global.socket[cascade];
+	sc_global.socket[cascade] = sc;
 	GLOBAL_UNLOCK();
 }
 
@@ -41,29 +36,34 @@ INLINE void socket_class_free( socket_class_t *sc ) {
 }
 
 INLINE void socket_class_rem( socket_class_t *sc ) {
-	size_t cascade = (size_t) sc->id % SC_CASCADE;
+	int cascade = sc->id % SC_CASCADE;
+	socket_class_t *cc, *cp = NULL;
 	GLOBAL_LOCK();
 #ifdef SC_DEBUG
 	_debug( "remove sc %lu\n", sc->id );
 #endif
-	if( sc == global.last_socket[cascade] )
-		global.last_socket[cascade] = sc->prev;
-	if( sc == global.first_socket[cascade] )
-		global.first_socket[cascade] = sc->next;
-	if( sc->prev )
-		sc->prev->next = sc->next;
-	if( sc->next )
-		sc->next->prev = sc->prev;
+	cc = sc_global.socket[cascade];
+	while( cc != NULL ) {
+		if( cc == sc ) {
+			if( cp == NULL )
+				sc_global.socket[cascade] = cc->next;
+			else
+				cp->next = cc->next;
+			break;
+		}
+		cp = cc;
+		cc = cc->next;
+	}
 	GLOBAL_UNLOCK();
 	socket_class_free( sc );
 }
 
 INLINE socket_class_t *socket_class_find( SV *sv ) {
-	size_t cascade;
-	socket_class_t *scf, *scl;
+	int cascade;
+	socket_class_t *sc;
 	u_long id;
 	SV **psv;
-	if( global.destroyed )
+	if( sc_global.destroyed )
 		return NULL;
 	if( ! SvROK( sv ) )
 		return NULL;
@@ -74,32 +74,26 @@ INLINE socket_class_t *socket_class_find( SV *sv ) {
 	if( psv == NULL )
 		return NULL;
 	sv = *psv;
-	if( ! SvIOK( sv ) )
+	if( !SvIOK( sv ) )
 		return NULL;
-	id = (u_long) SvIV( sv );
-	cascade = (size_t) id % SC_CASCADE;
+	id = (int) SvIV( sv );
+	cascade = id % SC_CASCADE;
+	/*
+#ifdef SC_DEBUG
+	_debug( "search sc %d, cascade %d\n", id, cascade );
+#endif
+	*/
 	GLOBAL_LOCK();
-	scf = global.first_socket[cascade];
-	scl = global.last_socket[cascade];
-	while( 1 ) {
-		if( scl == NULL )
-			break;
-		if( scl->id == id )
-			goto retl;
-		if( scf->id == id )
-			goto retf;
-		scl = scl->prev;
-		scf = scf->next;
+	for( sc = sc_global.socket[cascade]; sc != NULL; sc = sc->next ) {
+		if( sc->id == id )
+			goto found;
 	}
 #ifdef SC_DEBUG
-	_debug( "sc %lu NOT found\n", id );
+	_debug( "sc %d NOT found\n", id );
 #endif
-retf:
+found:
 	GLOBAL_UNLOCK();
-	return scf;
-retl:
-	GLOBAL_UNLOCK();
-	return scl;
+	return sc;
 }
 
 #ifdef _WIN32
@@ -428,6 +422,7 @@ INLINE int Socket_setblocking( SOCKET s, int value ) {
 
 INLINE int Socket_write( socket_class_t *sc, const char *buf, int len ) {
 	int r;
+	_debug( "send %d bytes\n", len );
 	r = send( sc->sock, buf, len, 0 );
 	if( r == SOCKET_ERROR ) {
 		switch( r = Socket_errno() ) {

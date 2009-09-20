@@ -895,7 +895,7 @@ finish:
 
 int mod_sc_readline( sc_t *sock, char **p_buf, int *p_len ) {
 	int r;
-	size_t i, pos = 0, len = 256;
+	size_t i, pos = 0, len = 1024;
 	char *p, ch;
 	p = sock->buffer;
 	while( 1 ) {
@@ -956,8 +956,13 @@ int mod_sc_readline( sc_t *sock, char **p_buf, int *p_len ) {
 		}
 		recv( sock->sock, sock->buffer + pos, (int) i, 0 );
 		pos += i;
-		if( r < (int) len )
+		if( r < (int) len ) {
+			/* line not complete.
+			 * next recv could block infinitely.
+			 * stop here?
+			 */
 			break;
+		}
 	}
 	sock->buffer[pos] = '\0';
 	*p_buf = sock->buffer;
@@ -975,7 +980,7 @@ int mod_sc_read_packet(
 	sc_t *sock, char *separator, size_t max, char **p_buf, int *p_len
 ) {
 	int r;
-	size_t i, pos = 0, len = 256, seplen;
+	size_t i, pos = 0, len = 1024, seplen;
 	char *p, *sep;
 	p = sock->buffer;
 	for( sep = separator, seplen = 0; *sep != '\0'; sep++, seplen++ );
@@ -1049,8 +1054,13 @@ int mod_sc_read_packet(
 		}
 		recv( sock->sock, sock->buffer + pos, (int) i, 0 );
 		pos += i;
-		if( r < (int) len )
+		if( r < (int) len ) {
+			/* packet not complete.
+			 * next recv could block infinitely.
+			 * stop here?
+			 */
 			break;
+		}
 	}
 	sock->buffer[pos] = '\0';
 	*p_buf = sock->buffer;
@@ -2207,11 +2217,11 @@ exit:
 }
 
 int mod_sc_get_errno( sc_t *socket ) {
-	return socket == NULL ? global.last_errno : socket->last_errno;
+	return socket == NULL ? sc_global.last_errno : socket->last_errno;
 }
 
 const char *mod_sc_get_error( sc_t *socket ) {
-	return socket == NULL ? global.last_error : socket->last_error;
+	return socket == NULL ? sc_global.last_error : socket->last_error;
 }
 
 void mod_sc_set_errno( sc_t *sock, int code ) {
@@ -2230,9 +2240,10 @@ void mod_sc_set_error( sc_t *sock, int code, const char *fmt, ... ) {
 		my_snprintf_( sock->last_error, sizeof(sock->last_error), fmt, vl );
 	}
 	else {
-		global.last_errno = code;
-		r = my_snprintf_( global.last_error, sizeof(global.last_error), fmt, vl );
-		sv_setpvn( ERRSV, global.last_error, r );
+		sc_global.last_errno = code;
+		r = my_snprintf_(
+			sc_global.last_error, sizeof(sc_global.last_error), fmt, vl );
+		sv_setpvn( ERRSV, sc_global.last_error, r );
 	}
 	va_end( vl );
 }

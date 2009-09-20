@@ -113,7 +113,7 @@ Additional arguments for the constructor.
                  The format is described at
                  http://www.openssl.org/docs/apps/ciphers.html
   
-  use_ctx        Use a shared context. All other parameters will be ignored.
+  use_ctx        Use a shared context. The other arguments will be ignored.
                  See Socket::Class::SSL::CTX for details
 
 =for formatter perl
