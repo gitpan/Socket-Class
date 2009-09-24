@@ -1,5 +1,8 @@
 Revision history for Perl extension Socket::Class.
 
+version 2.256
+    - fixed broken build
+
 version 2.255
     - fixed constructor in SSL module
     - fixed ctx handling in SSL module

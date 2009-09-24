@@ -422,7 +422,6 @@ INLINE int Socket_setblocking( SOCKET s, int value ) {
 
 INLINE int Socket_write( socket_class_t *sc, const char *buf, int len ) {
 	int r;
-	_debug( "send %d bytes\n", len );
 	r = send( sc->sock, buf, len, 0 );
 	if( r == SOCKET_ERROR ) {
 		switch( r = Socket_errno() ) {

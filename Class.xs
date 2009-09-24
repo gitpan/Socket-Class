@@ -510,7 +510,6 @@ PREINIT:
 PPCODE:
 	if( (sc = mod_sc_get_socket( this )) == NULL )
 		XSRETURN_EMPTY;
-	_debug( "ok\n" );
 	msg = SvPVx( buf, l1 );
 	max = len = (int) l1;
 	if( items > 2 ) {
