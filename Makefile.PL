@@ -74,15 +74,17 @@ elsif( $^O eq 'cygwin' ) {
 }
 
 if( $^O eq 'MSWin32' ) {
-	@_IP = split( ';', $ENV{'INCLUDE'} );
-	$r = find_header_item( \@_IP, 'winsock2.h', 'getaddrinfo' );
-	$r += find_header_item( \@_IP, 'winsock2.h', 'freeaddrinfo' );
-	$r += find_header_item( \@_IP, 'winsock2.h', 'getnameinfo' );
-	if( $r < 3 ) {
-		$_MAKEOPTS{'DEFINE'} .= ' -DSC_OLDNET';
+	if( $Config{'cc'} !~ /gcc/ ) {
+		@_IP = split( ';', $ENV{'INCLUDE'} );
+		$r = find_header_item( \@_IP, 'winsock2.h', 'getaddrinfo' );
+		$r += find_header_item( \@_IP, 'winsock2.h', 'freeaddrinfo' );
+		$r += find_header_item( \@_IP, 'winsock2.h', 'getnameinfo' );
+		if( $r < 3 ) {
+			$_MAKEOPTS{'DEFINE'} .= ' -DSC_OLDNET';
+		}
+		# bug #37639
+		$ExtUtils::MM_Win32::Config{'ccversion'} = 13;
 	}
-	# bug #37639
-	$ExtUtils::MM_Win32::Config{'ccversion'} = 13;
 }
 else {
 	@_IP = qw(/usr/local/include /usr/include /opt/include);

@@ -79,7 +79,8 @@ void debug_free();
 		_debug( "0x%lx free() called at %s:%d\n", \
 			(size_t) (x), __FILE__, __LINE__ ); \
 		(void) hv_delete( hv_dbg_mem, __v, (I32) strlen( __v ), G_DISCARD ); \
-		free( (x) ); (x) = NULL; \
+		free( (x) ); \
+		(x) = NULL; \
 	} \
 	if( dbg_lock ) MUTEX_UNLOCK( &dbg_mem_lock ); \
 }
@@ -155,7 +156,7 @@ struct st_sc_ssl_ctx {
 	unsigned long				thread_id;
 #endif
 	*/
-	SSL_METHOD					*method;
+	const SSL_METHOD			*method;
 	SSL_CTX						*ctx;
 	sc_t						*socket;
 	char						*private_key;

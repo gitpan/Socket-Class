@@ -70,7 +70,7 @@ elsif( $^O eq 'solaris' ) {
 
 if( $^O eq 'MSWin32' ) {
 	$makeopts{'DEFINE'} .= ' -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS';
-	if( ! $openssldir ) {
+	if( !$openssldir && $Config{'cc'} !~ /gcc/ ) {
 		$ENV{'PATH'} .= ";$Config{'bin'}";
 		chdir "openssl/source/";
 		unlink 'bufferoverflowu.lib';

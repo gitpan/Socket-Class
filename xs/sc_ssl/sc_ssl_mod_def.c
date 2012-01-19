@@ -1205,7 +1205,7 @@ int mod_sc_ssl_ctx_enable_compatibility( sc_ssl_ctx_t *ctx ) {
 
 int mod_sc_ssl_ctx_init_client( sc_ssl_ctx_t *ctx ) {
 	int r;
-	SSL_METHOD *method;
+	const SSL_METHOD *method;
 	switch( ctx->method_id ) {
 	case sslv2:
 		method = SSLv2_client_method();
@@ -1275,7 +1275,7 @@ error:
 
 int mod_sc_ssl_ctx_init_server( sc_ssl_ctx_t *ctx ) {
 	int r;
-	SSL_METHOD *method;
+	const SSL_METHOD *method;
 	switch( ctx->method_id ) {
 	case sslv2:
 		method = SSLv2_server_method();

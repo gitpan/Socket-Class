@@ -1659,4 +1659,5 @@ xs/sc_ssl/openssl/source/util/pl/unix.pl
 
 xs/sc_ssl/t/0_basic.t
 xs/sc_ssl/t/1_fork.t
-META.yml                                 Module meta-data (added by MakeMaker)
+META.yml                                 Module YAML meta-data (added by MakeMaker)
+META.json                                Module JSON meta-data (added by MakeMaker)

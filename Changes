@@ -1,5 +1,9 @@
 Revision history for Perl extension Socket::Class.
 
+version 2.257
+    - RT#74148 Patch to enable successfull build on Win32 strawberry perl (thx to KMX)
+    - few cosmetics in SSL module
+
 version 2.256
     - fixed broken build
 
