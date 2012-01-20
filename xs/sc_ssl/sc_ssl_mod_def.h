@@ -121,6 +121,14 @@ void debug_free();
 #endif
 #endif /* USE_ITHREADS */
 
+#ifdef _WIN32
+//#include <process.h>
+#define PROCESS_ID()	(unsigned int) GetCurrentProcessId()
+#else
+#define PROCESS_ID()	(unsigned int) getpid()
+#endif
+
+
 enum ssl_method {
 	sslv2,
 	sslv23,
@@ -156,7 +164,7 @@ struct st_sc_ssl_ctx {
 	unsigned long				thread_id;
 #endif
 	*/
-	const SSL_METHOD			*method;
+	SSL_METHOD					*method;
 	SSL_CTX						*ctx;
 	sc_t						*socket;
 	char						*private_key;
@@ -170,12 +178,13 @@ struct st_sc_ssl_ctx {
 #define SC_SSL_CTX_CASCADE		31
 
 struct st_sc_ssl_global {
-	sc_ssl_ctx_t				*ctx[SC_SSL_CTX_CASCADE];
+	sc_ssl_ctx_t				*ctx[SC_SSL_CTX_CASCADE + 1];
 	int							counter;
 	int							destroyed;
 #ifdef USE_ITHREADS
 	perl_mutex					thread_lock;
 #endif
+	unsigned int				process_id;
 };
 
 extern mod_sc_t *mod_sc;

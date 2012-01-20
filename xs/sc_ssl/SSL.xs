@@ -79,6 +79,7 @@ BOOT:
 	SSL_load_error_strings();
 	OpenSSL_add_all_algorithms();
 	Zero( &sc_ssl_global, 1, sc_ssl_global_t );
+	sc_ssl_global.process_id = PROCESS_ID();
 #ifdef USE_ITHREADS
 	MUTEX_INIT( &sc_ssl_global.thread_lock );
 #endif
@@ -100,14 +101,36 @@ PPCODE:
 
 void
 SSL_END( ... )
+PREINIT:
+	/*
+	sc_ssl_ctx_t *ctx1, *ctx2;
+	int i;
+	*/
 CODE:
 	(void) items; /* avoid compiler warning */
-	if( sc_ssl_global.destroyed )
+	if( sc_ssl_global.destroyed || sc_ssl_global.process_id != PROCESS_ID() )
 		return;
 	sc_ssl_global.destroyed = TRUE;
 #ifdef SC_DEBUG
 	_debug( "END called\n" );
 #endif
+	/*
+#ifdef USE_ITHREADS
+	MUTEX_LOCK( &sc_ssl_global.thread_lock );
+#endif
+	for( i = 0; i <= SC_SSL_CTX_CASCADE; i++ ) {
+		ctx1 = sc_ssl_global.ctx[i];
+		while( ctx1 != NULL ) {
+			ctx2 = ctx1->next;
+			free_context( ctx1 );
+			ctx1 = ctx2;
+		}
+		sc_ssl_global.ctx[i] = NULL;
+	}
+#ifdef USE_ITHREADS
+	MUTEX_UNLOCK( &sc_ssl_global.thread_lock );
+#endif
+	*/
 #ifdef USE_ITHREADS
 	MUTEX_DESTROY( &sc_ssl_global.thread_lock );
 #endif
@@ -130,7 +153,7 @@ PREINIT:
 PPCODE:
 	(void) items; /* avoid compiler warning */
 	MUTEX_LOCK( &sc_ssl_global.thread_lock );
-	for( i = 0; i < SC_SSL_CTX_CASCADE; i ++ ) {
+	for( i = 0; i <= SC_SSL_CTX_CASCADE; i ++ ) {
 		for( ctx = sc_ssl_global.ctx[i]; ctx != NULL; ctx = ctx->next ) {
 			/*if( !ctx->dont_clone )*/
 				ctx->refcnt ++;

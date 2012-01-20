@@ -24,7 +24,7 @@ $host = Socket::Class->new(
 	'domain' => 'inet',
 	'type' => 'raw',
 	'proto' => 'icmp',
-) or die Socket::Class->error;
+) or die "Can't create socket: $!";
 
 $addr = $host->get_hostaddr( $ARGV[0] );
 if( ! $addr ) {

@@ -210,6 +210,12 @@ void debug_free();
 #endif
 #endif /* USE_ITHREADS */
 
+#ifdef _WIN32
+//#include <process.h>
+#define PROCESS_ID()	(unsigned int) GetCurrentProcessId()
+#else
+#define PROCESS_ID()	(unsigned int) getpid()
+#endif
 
 #ifdef _WIN32
 
@@ -336,7 +342,7 @@ typedef struct st_socket_class {
 #define SC_CASCADE				31
 
 typedef struct st_sc_global {
-	socket_class_t				*socket[SC_CASCADE];
+	socket_class_t				*socket[SC_CASCADE + 1];
 	long						last_errno;
 	char						last_error[256];
 	int							destroyed;
@@ -344,6 +350,7 @@ typedef struct st_sc_global {
 #ifdef USE_ITHREADS
 	perl_mutex					thread_lock;
 #endif
+	unsigned int				process_id;
 } sc_global_t;
 
 extern sc_global_t sc_global;

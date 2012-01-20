@@ -375,7 +375,7 @@ services for UDP and TCP.
 
 =head1 AUTHORS
 
-Navalla org., Christian Mueller, L<http://www.navalla.org/>
+Christian Mueller, L<http://www.alien-heads.org/>
 
 =head1 COPYRIGHT
 

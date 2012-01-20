@@ -8,6 +8,8 @@ if( $^O eq 'cygwin' ) {
 	_skip_all();
 }
 
+#$ctx = Socket::Class::SSL::CTX->new();
+
 $s = Socket::Class::SSL->new(
 	'certificate' => 'cert/server.crt',
 	'private_key' => 'cert/server.key',

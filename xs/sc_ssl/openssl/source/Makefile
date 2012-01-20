@@ -12,9 +12,9 @@ SHLIB_VERSION_HISTORY=
 SHLIB_MAJOR=0
 SHLIB_MINOR=9.8
 SHLIB_EXT=
-PLATFORM=VC-WIN64A
+PLATFORM=VC-WIN32
 OPTIONS=--prefix=../build no-camellia no-capieng no-cms no-gmp no-jpake no-krb5 no-mdc2 no-montasm no-rc5 no-rfc3779 no-seed no-shared no-zlib no-zlib-dynamic
-CONFIGURE_ARGS=VC-WIN64A --prefix=../build
+CONFIGURE_ARGS=VC-WIN32 --prefix=../build
 SHLIB_TARGET=
 
 # HERE indicates where this Makefile lives.  This can be used to indicate

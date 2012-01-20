@@ -25,6 +25,7 @@ BOOT:
 	}
 #endif
 	Zero( &sc_global, 1, sc_global_t );
+	sc_global.process_id = PROCESS_ID();
 #ifdef USE_ITHREADS
 	MUTEX_INIT( &sc_global.thread_lock );
 #endif
@@ -64,24 +65,24 @@ void
 END( ... )
 PREINIT:
 	socket_class_t *sc1, *sc2;
-	u_long cascade;
+	int i;
 CODE:
 	(void) items; /* avoid compiler warning */
-	if( sc_global.destroyed )
+	if( sc_global.destroyed || PROCESS_ID() != sc_global.process_id )
 		return;
 	sc_global.destroyed = 1;
 #ifdef SC_DEBUG
 	_debug( "END called\n" );
 #endif
 	GLOBAL_LOCK();
-	for( cascade = 0; cascade < SC_CASCADE; cascade ++ ) {
-		sc1 = sc_global.socket[cascade];
+	for( i = 0; i <= SC_CASCADE; i ++ ) {
+		sc1 = sc_global.socket[i];
 		while( sc1 != NULL ) {
 			sc2 = sc1->next;
 			socket_class_free( sc1 );
 			sc1 = sc2;
 		}
-		sc_global.socket[cascade] = NULL;
+		sc_global.socket[i] = NULL;
 	}
 	GLOBAL_UNLOCK();
 #ifdef USE_ITHREADS
@@ -108,7 +109,7 @@ PREINIT:
 	int i;
 PPCODE:
 	GLOBAL_LOCK();
-	for( i = 0; i < SC_CASCADE; i ++ ) {
+	for( i = 0; i <= SC_CASCADE; i ++ ) {
 		for( sc = sc_global.socket[i]; sc != NULL; sc = sc->next ) {
 			if( sc->do_clone )
 				sc->refcnt ++;

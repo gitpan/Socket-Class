@@ -316,7 +316,7 @@ OpenSSL, L<http://www.openssl.org/>
 
 =head1 AUTHORS
 
-Navalla org., Christian Mueller, L<http://www.navalla.org/>
+Christian Mueller, L<http://www.alien-heads.org/>
 
 =head1 COPYRIGHT AND LICENSE
 

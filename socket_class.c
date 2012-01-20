@@ -3,7 +3,7 @@
 sc_global_t sc_global;
 
 INLINE void socket_class_add( socket_class_t *sc ) {
-	int cascade;
+	int i;
 	GLOBAL_LOCK();
 	sc->id = ++sc_global.counter;
 	sc->refcnt = 1;
@@ -11,12 +11,12 @@ INLINE void socket_class_add( socket_class_t *sc ) {
 	sc->thread_id = THREAD_ID();
 	sc->do_clone = TRUE;
 #endif
-	cascade = sc->id % SC_CASCADE;
+	i = sc->id & SC_CASCADE;
 #ifdef SC_DEBUG
-	_debug( "add sc %lu cascade %lu\n", sc->id, cascade );
+	_debug( "add sc %lu cascade %lu\n", sc->id, i );
 #endif
-	sc->next = sc_global.socket[cascade];
-	sc_global.socket[cascade] = sc;
+	sc->next = sc_global.socket[i];
+	sc_global.socket[i] = sc;
 	GLOBAL_UNLOCK();
 }
 
@@ -36,17 +36,17 @@ INLINE void socket_class_free( socket_class_t *sc ) {
 }
 
 INLINE void socket_class_rem( socket_class_t *sc ) {
-	int cascade = sc->id % SC_CASCADE;
+	int i = sc->id & SC_CASCADE;
 	socket_class_t *cc, *cp = NULL;
 	GLOBAL_LOCK();
 #ifdef SC_DEBUG
 	_debug( "remove sc %lu\n", sc->id );
 #endif
-	cc = sc_global.socket[cascade];
+	cc = sc_global.socket[i];
 	while( cc != NULL ) {
 		if( cc == sc ) {
 			if( cp == NULL )
-				sc_global.socket[cascade] = cc->next;
+				sc_global.socket[i] = cc->next;
 			else
 				cp->next = cc->next;
 			break;
@@ -59,7 +59,7 @@ INLINE void socket_class_rem( socket_class_t *sc ) {
 }
 
 INLINE socket_class_t *socket_class_find( SV *sv ) {
-	int cascade;
+	int i;
 	socket_class_t *sc;
 	u_long id;
 	SV **psv;
@@ -77,14 +77,14 @@ INLINE socket_class_t *socket_class_find( SV *sv ) {
 	if( !SvIOK( sv ) )
 		return NULL;
 	id = (int) SvIV( sv );
-	cascade = id % SC_CASCADE;
+	i = id & SC_CASCADE;
 	/*
 #ifdef SC_DEBUG
 	_debug( "search sc %d, cascade %d\n", id, cascade );
 #endif
 	*/
 	GLOBAL_LOCK();
-	for( sc = sc_global.socket[cascade]; sc != NULL; sc = sc->next ) {
+	for( sc = sc_global.socket[i]; sc != NULL; sc = sc->next ) {
 		if( sc->id == id )
 			goto found;
 	}
@@ -549,11 +549,10 @@ INLINE int my_debug( const char *fmt, ... ) {
 	va_list a;
 	int r;
 	size_t l;
-	char *tmp, *s1;
+	char *tmp;
 	l = strlen( fmt );
 	tmp = malloc( 64 + l );
-	s1 = my_strcpy( tmp, "[Socket::Class] " );
-	s1 = my_strcpy( s1, fmt );
+	sprintf( tmp, "[Socket::Class] [%u] %s", PROCESS_ID(), fmt );
 	va_start( a, fmt );
 	r = vfprintf( stderr, tmp, a );
 	fflush( stderr );

@@ -94,8 +94,8 @@ if( $^O eq 'MSWin32' ) {
 		rmtree( 'openssl/source/out32' );
 	}
 	else {
-		$makeopts{'INC'} .= ' -I$openssldir/include';
-		$makeopts{'LIBS'}[0] = '-L$openssldir/lib -llibeay32 -lssleay32';
+		$makeopts{'INC'} .= " -I\"$openssldir\\include\"";
+		$makeopts{'LIBS'}[0] = "-L\"$openssldir\\lib\" -llibeay32 -lssleay32";
 	}
 	# cpan bug #37639
 	$ExtUtils::MM_Win32::Config{'ccversion'} = 13;

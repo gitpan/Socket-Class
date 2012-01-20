@@ -865,7 +865,7 @@ int mod_sc_ssl_ctx_create( char **args, int argc, sc_ssl_ctx_t **p_ctx ) {
 	MUTEX_LOCK( &sc_ssl_global.thread_lock );
 #endif
 	ctx->id = ++sc_ssl_global.counter;
-	r = ctx->id % SC_SSL_CTX_CASCADE;
+	r = ctx->id & SC_SSL_CTX_CASCADE;
 	ctx->next = sc_ssl_global.ctx[r];
 	sc_ssl_global.ctx[r] = ctx;
 #ifdef USE_ITHREADS
@@ -922,15 +922,14 @@ sc_ssl_ctx_t *mod_sc_ssl_ctx_from_class( SV *sv ) {
 	if( !SvIOK( sv ) )
 		return NULL;
 	id = (int) SvIV( sv );
+	i = id & SC_SSL_CTX_CASCADE;
 #ifdef USE_ITHREADS
 	if( !sc_ssl_global.destroyed )
 		MUTEX_LOCK( &sc_ssl_global.thread_lock );
 #endif
-	for( i = 0; i < SC_SSL_CTX_CASCADE; i++ ) {
-		for( ctx = sc_ssl_global.ctx[i]; ctx != NULL; ctx = ctx->next ) {
-			if( ctx->id == id )
-				goto found;
-		}
+	for( ctx = sc_ssl_global.ctx[i]; ctx != NULL; ctx = ctx->next ) {
+		if( ctx->id == id )
+			goto found;
 	}
 #ifdef SC_DEBUG
 	_debug( "ctx %d NOT found\n", id );
@@ -1205,20 +1204,20 @@ int mod_sc_ssl_ctx_enable_compatibility( sc_ssl_ctx_t *ctx ) {
 
 int mod_sc_ssl_ctx_init_client( sc_ssl_ctx_t *ctx ) {
 	int r;
-	const SSL_METHOD *method;
+	SSL_METHOD *method;
 	switch( ctx->method_id ) {
 	case sslv2:
-		method = SSLv2_client_method();
+		method = (SSL_METHOD *) SSLv2_client_method();
 		break;
 	default:
 	case sslv23:
-		method = SSLv23_client_method();
+		method = (SSL_METHOD *) SSLv23_client_method();
 		break;
 	case sslv3:
-		method = SSLv3_client_method();
+		method = (SSL_METHOD *) SSLv3_client_method();
 		break;
 	case tlsv1:
-		method = TLSv1_client_method();
+		method = (SSL_METHOD *) TLSv1_client_method();
 		break;
 	}
 	if( ctx->method != method ) {
@@ -1275,20 +1274,20 @@ error:
 
 int mod_sc_ssl_ctx_init_server( sc_ssl_ctx_t *ctx ) {
 	int r;
-	const SSL_METHOD *method;
+	SSL_METHOD *method;
 	switch( ctx->method_id ) {
 	case sslv2:
-		method = SSLv2_server_method();
+		method = (SSL_METHOD *) SSLv2_server_method();
 		break;
 	default:
 	case sslv23:
-		method = SSLv23_server_method();
+		method = (SSL_METHOD *) SSLv23_server_method();
 		break;
 	case sslv3:
-		method = SSLv3_server_method();
+		method = (SSL_METHOD *) SSLv3_server_method();
 		break;
 	case tlsv1:
-		method = TLSv1_server_method();
+		method = (SSL_METHOD *) TLSv1_server_method();
 		break;
 	}
 	if( ctx->method != method ) {
@@ -1354,6 +1353,11 @@ error:
 /* internal functions */
 
 void free_context( sc_ssl_ctx_t *ctx ) {
+	/*
+#ifdef SC_DEBUG
+	_debug( "free ctx %u\n", ctx );
+#endif
+	*/
 	if( ctx->ctx != NULL )
 		SSL_CTX_free( ctx->ctx );
 	Safefree( ctx->private_key );
@@ -1371,7 +1375,7 @@ int remove_context( sc_ssl_ctx_t *ctx ) {
 	if( !sc_ssl_global.destroyed )
 		MUTEX_LOCK( &sc_ssl_global.thread_lock );
 #endif
-	i = ctx->id % SC_SSL_CTX_CASCADE;
+	i = ctx->id & SC_SSL_CTX_CASCADE;
 	cc = sc_ssl_global.ctx[i];
 	while( cc != NULL ) {
 		if( cc == ctx ) {
@@ -1406,7 +1410,8 @@ void free_userdata( void *p ) {
 		SSL_free( ud->ssl );
 	Safefree( ud->rcvbuf );
 	Safefree( ud->buffer );
-	mod_sc_ssl_ctx_destroy( ctx );
+	//if( !sc_ssl_global.destroyed )
+		mod_sc_ssl_ctx_destroy( ctx );
 	Safefree( ud );
 }
 
@@ -1471,11 +1476,10 @@ int my_debug( const char *fmt, ... ) {
 	va_list a;
 	int r;
 	size_t l;
-	char *tmp, *s1;
+	char *tmp;
 	l = strlen( fmt );
 	tmp = malloc( 64 + l );
-	s1 = my_strcpy( tmp, "[Socket::Class::SSL] " );
-	s1 = my_strcpy( s1, fmt );
+	sprintf( tmp, "[Socket::Class::SSL] [%u] %s", PROCESS_ID(), fmt );
 	va_start( a, fmt );
 	r = vfprintf( stderr, tmp, a );
 	fflush( stderr );

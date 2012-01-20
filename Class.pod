@@ -2035,7 +2035,7 @@ Use I<Socket::Class::include_path()> to get the path to I<mod_sc.h>.
 
 =head1 AUTHORS
 
-Navalla org., Christian Mueller, L<http://www.navalla.org/>
+Christian Mueller, L<http://www.alien-heads.org/>
 
 =head1 COPYRIGHT AND LICENSE
 
